@@ -27,3 +27,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Custom ###
+testfile.txt
+output.txt
+test.ps1
+testdata/
