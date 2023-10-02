@@ -4,17 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7dd7f607-95f8-4a29-bcb3-a6829d9e37fe" name="更改" comment="init">
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Compiler.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Test.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/frontend/Lexer.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/token/Token.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/token/TokenType.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/utils/IOUtils.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/testfile.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Compiler.iml" beforeDir="false" afterPath="$PROJECT_DIR$/Compiler.iml" afterDir="false" />
+    <list default="true" id="7dd7f607-95f8-4a29-bcb3-a6829d9e37fe" name="更改" comment="lexer pass">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/Lexer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/Lexer.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -86,7 +78,7 @@
       <workItem from="1695018972902" duration="2270000" />
       <workItem from="1696233005851" duration="171000" />
       <workItem from="1696233191286" duration="14527000" />
-      <workItem from="1696251982221" duration="2011000" />
+      <workItem from="1696251982221" duration="3146000" />
     </task>
     <task id="LOCAL-00001" summary="init">
       <option name="closed" value="true" />
@@ -96,7 +88,15 @@
       <option name="project" value="LOCAL" />
       <updated>1695018487050</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="lexer pass">
+      <option name="closed" value="true" />
+      <created>1696254046561</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1696254046561</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -124,7 +124,8 @@
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
     <MESSAGE value="init" />
-    <option name="LAST_COMMIT_MESSAGE" value="init" />
+    <MESSAGE value="lexer pass" />
+    <option name="LAST_COMMIT_MESSAGE" value="lexer pass" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

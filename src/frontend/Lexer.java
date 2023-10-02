@@ -3,10 +3,7 @@ package frontend;
 import token.Token;
 import token.TokenType;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Lexer {
     private Lexer() {}
@@ -35,6 +32,32 @@ public class Lexer {
         put("printf", TokenType.PRINTFTK);
         put("return", TokenType.RETURNTK);
         put("void", TokenType.VOIDTK);
+    }};
+
+    private final Map<String, TokenType> simpleTokens = new HashMap<>() {{
+        put("!=", TokenType.NEQ);
+        put("==", TokenType.EQL);
+        put("<=", TokenType.LEQ);
+        put(">=", TokenType.GEQ);
+        put("!", TokenType.NOT);
+        put("&&", TokenType.AND);
+        put("||", TokenType.OR);
+        put("+", TokenType.PLUS);
+        put("-", TokenType.MINU);
+        put("*", TokenType.MULT);
+        put("/", TokenType.DIV);
+        put("%", TokenType.MOD);
+        put("<", TokenType.LSS);
+        put(">", TokenType.GRE);
+        put("=", TokenType.ASSIGN);
+        put(";", TokenType.SEMICN);
+        put(",", TokenType.COMMA);
+        put("(", TokenType.LPARENT);
+        put(")", TokenType.RPARENT);
+        put("[", TokenType.LBRACK);
+        put("]", TokenType.RBRACK);
+        put("{", TokenType.LBRACE);
+        put("}", TokenType.RBRACE);
     }};
 
     private String source = null;
@@ -111,83 +134,7 @@ public class Lexer {
             tokens.add(token);
             return token;
         }
-        // !, !=
-        else if (c == '!') {
-            Token token;
-            if (nextC == '=') {
-                curPos++;
-                token = new Token(TokenType.NEQ, "!=", curLine);
-            } else token = new Token(TokenType.NOT, "!", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // &&
-        else if (c == '&') {
-            if (nextC == '&') {
-                curPos++;
-                Token token = new Token(TokenType.AND, "&&", curLine);
-                tokens.add(token);
-                return token;
-            }
-        }
-        // ||
-        else if (c == '|') {
-            if (nextC == '|') {
-                curPos++;
-                Token token = new Token(TokenType.OR, "||", curLine);
-                tokens.add(token);
-                return token;
-            }
-        }
-        // <, <=
-        else if (c == '<') {
-            Token token;
-            if (nextC == '=') {
-                curPos++;
-                token = new Token(TokenType.LEQ, "<=", curLine);
-            } else token = new Token(TokenType.LSS, "<", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // >, >=
-        else if (c == '>') {
-            Token token;
-            if (nextC == '=') {
-                curPos++;
-                token = new Token(TokenType.GEQ, ">=", curLine);
-            } else token = new Token(TokenType.GRE, ">", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // =, ==
-        else if (c == '=') {
-            Token token;
-            if (nextC == '=') {
-                curPos++;
-                token = new Token(TokenType.EQL, "==", curLine);
-            } else token = new Token(TokenType.ASSIGN, "=", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // +
-        else if (c == '+') {
-            Token token = new Token(TokenType.PLUS, "+", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // -
-        else if (c == '-') {
-            Token token = new Token(TokenType.MINU, "-", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // *
-        else if (c == '*') {
-            Token token = new Token(TokenType.MULT, "*", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // /或者是注释, 在此就将注释完全跳过, 并返回有意义的下一个token
+        // /或注释, 在此就将注释完全跳过, 并返回有意义的下一个token
         else if (c == '/') {
             if (nextC == '/') {
                 int j = source.indexOf('\n', curPos + 2);
@@ -210,57 +157,14 @@ public class Lexer {
                 return token;
             }
         }
-        // %
-        else if (c == '%') {
-            Token token = new Token(TokenType.MOD, "%", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // ,
-        else if (c == ',') {
-            Token token = new Token(TokenType.COMMA, ",", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // ;
-        else if (c == ';') {
-            Token token = new Token(TokenType.SEMICN, ";", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // (
-        else if (c == '(') {
-            Token token = new Token(TokenType.LPARENT, "(", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // )
-        else if (c == ')') {
-            Token token = new Token(TokenType.RPARENT, ")", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // [
-        else if (c == '[') {
-            Token token = new Token(TokenType.LBRACK, "[", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // ]
-        else if (c == ']') {
-            Token token = new Token(TokenType.RBRACK, "]", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // {
-        else if (c == '{') {
-            Token token = new Token(TokenType.LBRACE, "{", curLine);
-            tokens.add(token);
-            return token;
-        }
-        // }
-        else if (c == '}') {
-            Token token = new Token(TokenType.RBRACE, "}", curLine);
+        // 简单符号
+        else if (simpleTokens.containsKey(String.valueOf(c)) || simpleTokens.containsKey(String.valueOf(c) + nextC)) {
+            String s = String.valueOf(c);
+            if (simpleTokens.containsKey(s + nextC)) {
+                s += nextC;
+                curPos++;
+            }
+            Token token = new Token(simpleTokens.get(s), s, curLine);
             tokens.add(token);
             return token;
         }
