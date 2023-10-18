@@ -33,3 +33,9 @@ testfile.txt
 output.txt
 test.ps1
 testdata/
+*.zip
+*.7z
+*.tar.gz
+*.tar
+*.gz
+*.rar

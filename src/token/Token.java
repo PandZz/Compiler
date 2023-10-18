@@ -55,4 +55,8 @@ public class Token {
     public String toString() {
         return String.format("%s %s", type, value);
     }
+
+    public String toDebugString() {
+        return String.format("[type]:%s [value]:%s [line]:%d", type, value, line);
+    }
 }

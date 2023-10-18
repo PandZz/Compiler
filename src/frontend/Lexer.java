@@ -71,6 +71,11 @@ public class Lexer {
     }
 
     public List<Token> getTokens() {
+        if (source == null) throw new RuntimeException("Source not set");
+        Token nextToken;
+        do {
+            nextToken = next();
+        } while (nextToken != null);
         return tokens;
     }
 
