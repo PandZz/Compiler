@@ -4,19 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7dd7f607-95f8-4a29-bcb3-a6829d9e37fe" name="更改" comment="lexer improve simple-token match">
-      <change afterPath="$PROJECT_DIR$/src/frontend/Parser.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/node/NodeType.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/node/VNode.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="7dd7f607-95f8-4a29-bcb3-a6829d9e37fe" name="更改" comment="parser passed">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Compiler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/Compiler.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Test.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/Test.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/frontend/Lexer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/Lexer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/token/Token.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/token/Token.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/utils/IOUtils.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/IOUtils.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/testfile.txt" beforeDir="false" afterPath="$PROJECT_DIR$/testfile.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/Parser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/Parser.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/node/NodeType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/node/NodeType.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/node/VNode.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/node/VNode.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -96,7 +90,7 @@
       <workItem from="1697459895869" duration="2842000" />
       <workItem from="1697550044387" duration="9690000" />
       <workItem from="1697598311727" duration="6102000" />
-      <workItem from="1697605658402" duration="1739000" />
+      <workItem from="1697605658402" duration="5125000" />
     </task>
     <task id="LOCAL-00001" summary="init">
       <option name="closed" value="true" />
@@ -122,7 +116,15 @@
       <option name="project" value="LOCAL" />
       <updated>1696255217584</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="parser passed">
+      <option name="closed" value="true" />
+      <created>1697607440938</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1697607440938</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -167,7 +169,8 @@
     <MESSAGE value="init" />
     <MESSAGE value="lexer pass" />
     <MESSAGE value="lexer improve simple-token match" />
-    <option name="LAST_COMMIT_MESSAGE" value="lexer improve simple-token match" />
+    <MESSAGE value="parser passed" />
+    <option name="LAST_COMMIT_MESSAGE" value="parser passed" />
   </component>
   <component name="XDebuggerManager">
     <watches-manager>

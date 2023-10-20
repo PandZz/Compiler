@@ -13,6 +13,8 @@ public class Parser {
     private List<Token> tokens;
     private int nowTokenIndex = 0;
 
+    private VNode compUnitNode;
+
     private Parser() {
     }
 
@@ -23,11 +25,25 @@ public class Parser {
         return instance;
     }
 
-    public VNode parse() {
+    public VNode transTokens2VNode(List<Token> tokens) {
+        this.tokens = tokens;
+        this.nowTokenIndex = 0;
+        this.compUnitNode = null;
+        return getCompUnitNode();
+    }
+
+    public VNode getCompUnitNode() {
+        if (compUnitNode == null) {
+            parse();
+        }
+        return compUnitNode;
+    }
+
+    private void parse() {
         if (tokens == null) {
             throw new RuntimeException("token list is empty");
         }
-        return CompUnit();
+        this.compUnitNode = CompUnit();
     }
 
     public void setTokens(List<Token> tokens) {

@@ -16,7 +16,6 @@ public class VNode {
             NodeType.MulExp, NodeType.AddExp, NodeType.RelExp, NodeType.EqExp, NodeType.LAndExp, NodeType.LOrExp
     );
 
-
     public VNode(VNode parentNode, List<VNode> childrenNodes, NodeType nodeType) {
         this.parentNode = parentNode;
         this.childrenNodes = childrenNodes;
@@ -28,11 +27,13 @@ public class VNode {
         this.childrenNodes = childrenNodes;
         this.nodeType = nodeType;
         this.value = '<' + nodeType.toString() + '>';
+        // 以下节点类型不需要输出
         if (nodeType == NodeType.BlockItem || nodeType == NodeType.Decl || nodeType == NodeType.BType) {
             this.value = "";
         }
     }
 
+    // 以Token创建的叶子节点都是终结符
     public VNode(Token token) {
         this.value = token.toString();
         this.nodeType = NodeType.EndNode;
@@ -63,6 +64,7 @@ public class VNode {
     }
 
     public void printToBuffer() {
+        // 因改变了语法而导致语法树改变的, 需要特殊处理
         if (justifiedNodeTypes.contains(this.nodeType)) {
             childrenNodes.get(0).printToBuffer();
             IOUtils.appendBuffer(this.value);

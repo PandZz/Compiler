@@ -79,6 +79,11 @@ public class Lexer {
         return tokens;
     }
 
+    public List<Token> transStr2Tokens(String source) {
+        setSource(source);
+        return getTokens();
+    }
+
     /**
      * 获取下一个token并将其加入到tokens中
      * @return 下一个token(如果没有则返回null)

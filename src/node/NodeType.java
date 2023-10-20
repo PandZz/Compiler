@@ -38,5 +38,5 @@ public enum NodeType {
     EqExp,
     LAndExp,
     // 指代终结符
-    EndNode;
+    EndNode
 }
