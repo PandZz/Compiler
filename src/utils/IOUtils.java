@@ -9,6 +9,8 @@ import java.util.StringJoiner;
 public class IOUtils {
     private static final String INPUT_FILE = "testfile.txt";
     private static final String OUTPUT_FILE = "output.txt";
+    private static final String DEBUG_FILE = "debug.txt";
+    private static final String ERROR_FILE = "error.txt";
     private static StringJoiner buffer = new StringJoiner("\n");
     public static String readFile(String path) throws IOException {
         InputStream in = new BufferedInputStream(Files.newInputStream(Paths.get(path)));
@@ -37,8 +39,16 @@ public class IOUtils {
         buffer = new StringJoiner("\n");
     }
 
-    public static void writeBuffer() throws IOException {
+    public static void writeBuffer2OutPut() throws IOException {
         writeFile(OUTPUT_FILE, buffer.toString());
+    }
+
+    public static void writeBuffer2Debug() throws IOException {
+        writeFile(DEBUG_FILE, buffer.toString());
+    }
+
+    public static void writeBuffer2Error() throws IOException {
+        writeFile(ERROR_FILE, buffer.toString());
     }
 
     public static String readInput() throws IOException {

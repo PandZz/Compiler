@@ -24,7 +24,7 @@ public class Compiler {
             // 打印语法树
             compUnitNode.printToBuffer();
             IOUtils.appendBuffer("");
-            IOUtils.writeBuffer();
+            IOUtils.writeBuffer2OutPut();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
