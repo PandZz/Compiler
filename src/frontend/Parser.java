@@ -1,9 +1,10 @@
 package frontend;
 
-import node.NodeType;
-import node.VNode;
-import token.Token;
-import token.TokenType;
+import config.Config;
+import error.*;
+import error.Error;
+import node.*;
+import token.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,8 +13,8 @@ public class Parser {
     private static Parser instance = null;
     private List<Token> tokens;
     private int nowTokenIndex = 0;
-
     private VNode compUnitNode;
+    private final ErrorHandler errorHandler = ErrorHandler.getInstance();
 
     private Parser() {
     }
@@ -54,14 +55,17 @@ public class Parser {
         return tokens.get(nowTokenIndex);
     }
 
+    private Token last() {
+        return tokens.get(nowTokenIndex - 1);
+    }
+
     private Token next(int i) {
         return tokens.get(nowTokenIndex + i);
     }
 
     private Token expect(TokenType type) {
         if (now().getType() != type) {
-            System.out.println(now().toDebugString());
-            throw new RuntimeException("Expect " + type + " but got " + now().getType());
+            throw new RuntimeException("Expect " + type + " but got " + now().getType() + "\n" + "token info: " + now().toDebugString());
         }
         Token token = now();
         if (this.nowTokenIndex + 1 < tokens.size()) {
@@ -107,8 +111,21 @@ public class Parser {
             childrenNodes.add(new VNode(expect(TokenType.COMMA)));
             childrenNodes.add(ConstDef());
         }
-        childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+        handleSEMICNError(childrenNodes);
         return new VNode(childrenNodes, NodeType.ConstDecl);
+    }
+
+    private void handleSEMICNError(List<VNode> childrenNodes) {
+        try {
+            childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+        } catch (RuntimeException e) {
+            if (Config.ERROR) {
+                errorHandler.addError(new Error(ErrorType.i, last().getLine()));
+            }
+            if (Config.DEBUG) {
+                System.out.printf("in line %d: '%s' should be followed by ';'%n", last().getLine(), last().getValue());
+            }
+        }
     }
 
     private VNode BType() {
@@ -126,7 +143,7 @@ public class Parser {
         while (now().getType() == TokenType.LBRACK) {
             childrenNodes.add(new VNode(expect(TokenType.LBRACK)));
             childrenNodes.add(ConstExp());
-            childrenNodes.add(new VNode(expect(TokenType.RBRACK)));
+            handleRBRACKError(childrenNodes);
         }
         childrenNodes.add(new VNode(expect(TokenType.ASSIGN)));
         childrenNodes.add(ConstInitVal());
@@ -161,7 +178,7 @@ public class Parser {
             childrenNodes.add(new VNode(expect(TokenType.COMMA)));
             childrenNodes.add(VarDef());
         }
-        childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+        handleSEMICNError(childrenNodes);
         return new VNode(childrenNodes, NodeType.VarDecl);
     }
 
@@ -173,7 +190,7 @@ public class Parser {
         while (now().getType() == TokenType.LBRACK) {
             childrenNodes.add(new VNode(expect(TokenType.LBRACK)));
             childrenNodes.add(ConstExp());
-            childrenNodes.add(new VNode(expect(TokenType.RBRACK)));
+            handleRBRACKError(childrenNodes);
         }
         if (now().getType() == TokenType.ASSIGN) {
             childrenNodes.add(new VNode(expect(TokenType.ASSIGN)));
@@ -211,9 +228,22 @@ public class Parser {
         if (now().getType() != TokenType.RPARENT) {
             childrenNodes.add(FuncFParams());
         }
-        childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
-        childrenNodes.add(Block());
+        handlePRARENTError(childrenNodes);
         return new VNode(childrenNodes, NodeType.FuncDef);
+    }
+
+    private void handlePRARENTError(List<VNode> childrenNodes) {
+        try {
+            childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
+        } catch (RuntimeException e) {
+            if (Config.ERROR) {
+                errorHandler.addError(new Error(ErrorType.j, last().getLine()));
+            }
+            if (Config.DEBUG) {
+                System.out.printf("in line %d: missing ')' after '%s'%n", last().getLine(), last().getValue());
+            }
+        }
+        childrenNodes.add(Block());
     }
 
     private VNode MainFuncDef() {
@@ -222,8 +252,7 @@ public class Parser {
         childrenNodes.add(new VNode(expect(TokenType.INTTK)));
         childrenNodes.add(new VNode(expect(TokenType.MAINTK)));
         childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-        childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
-        childrenNodes.add(Block());
+        handlePRARENTError(childrenNodes);
         return new VNode(childrenNodes, NodeType.MainFuncDef);
     }
 
@@ -257,14 +286,27 @@ public class Parser {
         childrenNodes.add(new VNode(idenfrToken));
         if (now().getType() == TokenType.LBRACK) {
             childrenNodes.add(new VNode(expect(TokenType.LBRACK)));
-            childrenNodes.add(new VNode(expect(TokenType.RBRACK)));
+            handleRBRACKError(childrenNodes);
             while (now().getType() == TokenType.LBRACK) {
                 childrenNodes.add(new VNode(expect(TokenType.LBRACK)));
                 childrenNodes.add(ConstExp());
-                childrenNodes.add(new VNode(expect(TokenType.RBRACK)));
+                handleRBRACKError(childrenNodes);
             }
         }
         return new VNode(childrenNodes, NodeType.FuncFParam);
+    }
+
+    private void handleRBRACKError(List<VNode> childrenNodes) {
+        try {
+            childrenNodes.add(new VNode(expect(TokenType.RBRACK)));
+        } catch (RuntimeException e) {
+            if (Config.ERROR) {
+                errorHandler.addError(new Error(ErrorType.k, last().getLine()));
+            }
+            if (Config.DEBUG) {
+                System.out.printf("in line %d: missing ']' after '%s'%n", last().getLine(), last().getValue());
+            }
+        }
     }
 
     private VNode Block() {
@@ -324,7 +366,7 @@ public class Parser {
             childrenNodes.add(new VNode(expect(TokenType.IFTK)));
             childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
             childrenNodes.add(Cond());
-            childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
+            handlePRARENTError(childrenNodes);
             childrenNodes.add(Stmt());
             if (now().getType() == TokenType.ELSETK) {
                 childrenNodes.add(new VNode(expect(TokenType.ELSETK)));
@@ -337,15 +379,15 @@ public class Parser {
             if (now().getType() != TokenType.SEMICN) {
                 childrenNodes.add(ForStmt());
             }
-            childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+            handleSEMICNError(childrenNodes);
             if (now().getType() != TokenType.SEMICN) {
                 childrenNodes.add(Cond());
             }
-            childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+            handleSEMICNError(childrenNodes);
             if (now().getType() != TokenType.RPARENT) {
                 childrenNodes.add(ForStmt());
             }
-            childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
+            handlePRARENTError(childrenNodes);
             childrenNodes.add(Stmt());
         } else if (now().getType() == TokenType.BREAKTK || now().getType() == TokenType.CONTINUETK) {
             // 'break' ';' | 'continue' ';'
@@ -354,14 +396,14 @@ public class Parser {
             } else {
                 childrenNodes.add(new VNode(expect(TokenType.CONTINUETK)));
             }
-            childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+            handleSEMICNError(childrenNodes);
         } else if (now().getType() == TokenType.RETURNTK) {
             // 'return' [Exp] ';'
             childrenNodes.add(new VNode(expect(TokenType.RETURNTK)));
             if (now().getType() != TokenType.SEMICN) {
                 childrenNodes.add(Exp());
             }
-            childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+            handleSEMICNError(childrenNodes);
         } else if (now().getType() == TokenType.PRINTFTK) {
             // 'printf' '(' FormatString { ',' Exp } ')' ';'
             childrenNodes.add(new VNode(expect(TokenType.PRINTFTK)));
@@ -371,8 +413,8 @@ public class Parser {
                 childrenNodes.add(new VNode(expect(TokenType.COMMA)));
                 childrenNodes.add(Exp());
             }
-            childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
-            childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+            handlePRARENTError(childrenNodes);
+            handleSEMICNError(childrenNodes);
         } else {
             if (hasAssignInLine()) {
                 // LVal '=' Exp ';' | LVal '=' 'getint' '(' ')' ';'
@@ -382,19 +424,19 @@ public class Parser {
                     // LVal '=' 'getint' '(' ')' ';'
                     childrenNodes.add(new VNode(expect(TokenType.GETINTTK)));
                     childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-                    childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
-                    childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+                    handlePRARENTError(childrenNodes);
+                    handleSEMICNError(childrenNodes);
                 } else {
                     // LVal '=' Exp ';'
                     childrenNodes.add(Exp());
-                    childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+                    handleSEMICNError(childrenNodes);
                 }
             } else {
                 // [Exp] ';'
                 if (now().getType() != TokenType.SEMICN) {
                     childrenNodes.add(Exp());
                 }
-                childrenNodes.add(new VNode(expect(TokenType.SEMICN)));
+                handleSEMICNError(childrenNodes);
             }
         }
         return new VNode(childrenNodes, NodeType.Stmt);
@@ -431,7 +473,7 @@ public class Parser {
         while (now().getType() == TokenType.LBRACK) {
             childrenNodes.add(new VNode(expect(TokenType.LBRACK)));
             childrenNodes.add(Exp());
-            childrenNodes.add(new VNode(expect(TokenType.RBRACK)));
+            handleRBRACKError(childrenNodes);
         }
         return new VNode(childrenNodes, NodeType.LVal);
     }
@@ -442,7 +484,7 @@ public class Parser {
         if (now().getType() == TokenType.LPARENT) {
             childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
             childrenNodes.add(Exp());
-            childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
+            handlePRARENTError(childrenNodes);
         } else if (now().getType() == TokenType.IDENFR) {
             childrenNodes.add(LVal());
         } else {
@@ -477,7 +519,7 @@ public class Parser {
             if (now().getType() != TokenType.RPARENT) {
                 childrenNodes.add(FuncRParams());
             }
-            childrenNodes.add(new VNode(expect(TokenType.RPARENT)));
+            handlePRARENTError(childrenNodes);
         } else {
             // PrimaryExp
             childrenNodes.add(PrimaryExp());

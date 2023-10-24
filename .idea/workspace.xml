@@ -5,12 +5,20 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7dd7f607-95f8-4a29-bcb3-a6829d9e37fe" name="更改" comment="parser passed">
+      <change afterPath="$PROJECT_DIR$/src/config/Config.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/error/Error.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/error/ErrorHandler.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/error/ErrorType.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/symbol/Symbol.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/symbol/SymbolTable.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/symbol/SymbolType.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/Compiler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/Compiler.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/Lexer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/Lexer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Test.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/Test.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/frontend/Parser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/Parser.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/node/NodeType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/node/NodeType.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/node/VNode.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/node/VNode.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/IOUtils.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/IOUtils.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/testfile.txt" beforeDir="false" afterPath="$PROJECT_DIR$/testfile.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -20,12 +28,17 @@
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
-        <option value="Class" />
         <option value="Enum" />
+        <option value="Class" />
       </list>
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="master" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProblemsViewState">
@@ -45,10 +58,14 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ASKED_ADD_EXTERNAL_FILES": "true",
+    "Downloaded.Files.Path.Enabled": "false",
+    "Repository.Attach.Annotations": "false",
+    "Repository.Attach.JavaDocs": "false",
+    "Repository.Attach.Sources": "false",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "WebServerToolWindowFactoryState": "false",
-    "git-widget-placeholder": "master",
+    "git-widget-placeholder": "error",
     "last_opened_file_path": "E:/Develop/idea_projects/Compiler/src/utils",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
@@ -58,7 +75,7 @@
     "project.structure.last.edited": "模块",
     "project.structure.proportion": "0.15",
     "project.structure.side.proportion": "0.2",
-    "settings.editor.selected.configurable": "profiler.jvm",
+    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -91,6 +108,10 @@
       <workItem from="1697550044387" duration="9690000" />
       <workItem from="1697598311727" duration="6102000" />
       <workItem from="1697605658402" duration="5125000" />
+      <workItem from="1697863259704" duration="1878000" />
+      <workItem from="1697883559424" duration="800000" />
+      <workItem from="1698105567620" duration="3553000" />
+      <workItem from="1698127446286" duration="8125000" />
     </task>
     <task id="LOCAL-00001" summary="init">
       <option name="closed" value="true" />
@@ -156,6 +177,17 @@
                   <entry key="Table.Default.Author.ColumnIdWidth" value="94" />
                   <entry key="Table.Default.Date.ColumnIdWidth" value="54" />
                   <entry key="Table.Space.CommitStatus.ColumnIdWidth" value="54" />
+                </map>
+              </option>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="master" />
+                      </list>
+                    </value>
+                  </entry>
                 </map>
               </option>
             </State>

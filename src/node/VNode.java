@@ -63,6 +63,11 @@ public class VNode {
         return childrenNodes;
     }
 
+    // 形如: <Decl> 或 SEMICON ;
+    public String getValue() {
+        return value;
+    }
+
     public void printToBuffer() {
         // 因改变了语法而导致语法树改变的, 需要特殊处理
         if (justifiedNodeTypes.contains(this.nodeType)) {
