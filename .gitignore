@@ -32,6 +32,7 @@ bin/
 ### Custom ###
 testfile.txt
 output.txt
+error.txt
 test.ps1
 testdata/
 *.zip
