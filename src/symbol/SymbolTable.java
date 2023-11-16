@@ -1,37 +1,38 @@
 package symbol;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class SymbolTable {
-    private final Map<String, Symbol> symbolMap = new HashMap<>();
-    private final SymbolTable parent;
+    private SymbolTable parentTable;
+    private Map<String, Symbol> symbolMap;
+    private List<SymbolTable> childrenTables;
+
+    public SymbolTable(SymbolTable parentTable) {
+        this.parentTable = parentTable;
+        symbolMap = new HashMap<>();
+        childrenTables = new ArrayList<>();
+    }
+
+    public SymbolTable getParentTable() {
+        return parentTable;
+    }
+
+    public void addChildTable(SymbolTable childTable) {
+        childrenTables.add(childTable);
+    }
 
     public void addSymbol(Symbol symbol) {
-        symbolMap.put(symbol.getToken().getValue(), symbol);
+        symbolMap.put(symbol.getName(), symbol);
     }
 
-    public SymbolTable(SymbolTable parent) {
-        this.parent = parent;
-    }
-
-    public SymbolTable() {
-        this.parent = null;
-    }
-
-    public Symbol getSymbolInAllLevel(String name) {
-        SymbolTable table = this;
-        while (table != null) {
-            Symbol symbol = table.symbolMap.get(name);
-            if (symbol != null) {
-                return symbol;
-            }
-            table = table.parent;
+    public Symbol getSymbolByName(String name, boolean recursive) {
+        Symbol symbol = symbolMap.get(name);
+        if (recursive && symbol == null && parentTable != null) {
+            return parentTable.getSymbolByName(name, true);
         }
-        return null;
-    }
-
-    public Symbol getSymbolInCurrentLevel(String name) {
-        return symbolMap.get(name);
+        return symbol;
     }
 }

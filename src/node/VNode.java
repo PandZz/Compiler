@@ -7,26 +7,20 @@ import java.util.List;
 import java.util.Set;
 
 public class VNode {
-    private VNode parentNode;
     private List<VNode> childrenNodes;
     private NodeType nodeType;
     private String value;
+    private int line; // 代表当前node最后一个token所在的行数
 
     private static final Set<NodeType> justifiedNodeTypes = Set.of(
             NodeType.MulExp, NodeType.AddExp, NodeType.RelExp, NodeType.EqExp, NodeType.LAndExp, NodeType.LOrExp
     );
 
-    public VNode(VNode parentNode, List<VNode> childrenNodes, NodeType nodeType) {
-        this.parentNode = parentNode;
-        this.childrenNodes = childrenNodes;
-        this.nodeType = nodeType;
-        this.value = '<' + nodeType.toString() + '>';
-    }
-
     public VNode(List<VNode> childrenNodes, NodeType nodeType) {
         this.childrenNodes = childrenNodes;
         this.nodeType = nodeType;
         this.value = '<' + nodeType.toString() + '>';
+        this.line = getLastChildNode().getLine();
         // 以下节点类型不需要输出
         if (nodeType == NodeType.BlockItem || nodeType == NodeType.Decl || nodeType == NodeType.BType) {
             this.value = "";
@@ -37,14 +31,7 @@ public class VNode {
     public VNode(Token token) {
         this.value = token.toString();
         this.nodeType = NodeType.EndNode;
-    }
-
-    public VNode getParentNode() {
-        return parentNode;
-    }
-
-    public void setParentNode(VNode parentNode) {
-        this.parentNode = parentNode;
+        this.line = token.getLine();
     }
 
     public NodeType getNodeType() {
@@ -59,11 +46,42 @@ public class VNode {
         childrenNodes.add(childNode);
     }
 
+    /**
+     * 获取当前语法树节点在源文件中的行数
+     * @return 行数(非终结符的行数为最后一个子节点的行数)
+     */
+    public int getLine() {
+        return line;
+    }
+
     public List<VNode> getChildrenNodes() {
         return childrenNodes;
     }
 
-    // 形如: <Decl> 或 SEMICON ;
+    /**
+     * 获取当前语法树节点的第index个子节点
+     * @param index 子节点的下标
+     * @return 对应子结点对象, 下标超出则为null
+     */
+    public VNode getChildNode(int index) {
+        if (index < 0 || index >= childrenNodes.size()) {
+            return null;
+        }
+        return childrenNodes.get(index);
+    }
+
+    public VNode get1stChildNode() {
+        return childrenNodes.get(0);
+    }
+
+    public VNode getLastChildNode() {
+        return childrenNodes.get(childrenNodes.size() - 1);
+    }
+
+    /**
+     * 获取语法树节点的值
+     * @return 形如: &lt;Decl&gt; 或 SEMICON ; 的字符串
+     */
     public String getValue() {
         return value;
     }

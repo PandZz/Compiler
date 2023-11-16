@@ -35,6 +35,10 @@ public class Token {
         this.type = type;
     }
 
+    /**
+     * 获取 Token 的值
+     * @return (String) Token 的值, 形如 int, getint, {, "hello world"等
+     */
     public String getValue() {
         return value;
     }

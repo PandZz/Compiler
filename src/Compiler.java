@@ -1,3 +1,5 @@
+import config.Config;
+import error.ErrorHandler;
 import frontend.Lexer;
 import frontend.Parser;
 import node.VNode;
@@ -21,10 +23,17 @@ public class Compiler {
             Parser parser = Parser.getInstance();
             VNode compUnitNode = parser.transTokens2VNode(tokens);
 
-            // 打印语法树
-            compUnitNode.printToBuffer();
+            // 错误处理
+            if (Config.ERROR) {
+                ErrorHandler errorHandler = ErrorHandler.getInstance();
+                errorHandler.CompUnitError(compUnitNode);
+                errorHandler.printErrors2Buffer();
+            }
+
+            // 打印
+//            compUnitNode.printToBuffer();
             IOUtils.appendBuffer("");
-            IOUtils.writeBuffer2OutPut();
+            IOUtils.writeBuffer2Error();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

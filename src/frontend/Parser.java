@@ -1,3 +1,7 @@
+/**
+ * Parser 递归子程序分析token序列生成AST抽象语法树
+ * 在这里处理语法错误: i, j, k 以及 a
+ */
 package frontend;
 
 import config.Config;
@@ -6,8 +10,7 @@ import error.Error;
 import node.*;
 import token.*;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class Parser {
     private static Parser instance = null;
@@ -15,6 +18,16 @@ public class Parser {
     private int nowTokenIndex = 0;
     private VNode compUnitNode;
     private final ErrorHandler errorHandler = ErrorHandler.getInstance();
+    private final Map<NodeType, Set<TokenType>> FIRST = new HashMap<>() {{
+        put(NodeType.FuncRParams, new HashSet<>() {{
+            add(TokenType.LPARENT);
+            add(TokenType.IDENFR);
+            add(TokenType.INTCON);
+            add(TokenType.PLUS);
+            add(TokenType.MINU);
+            add(TokenType.NOT);
+        }});
+    }};
 
     private Parser() {
     }
@@ -220,15 +233,17 @@ public class Parser {
 
     private VNode FuncDef() {
         // FuncDef → FuncType Ident '(' [FuncFParams] ')' Block
+        // Fi(FuncFParams) = Fi(BType) = { 'int' }
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(FuncType());
         Token idenfrToken = expect(TokenType.IDENFR);
         childrenNodes.add(new VNode(idenfrToken));
         childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-        if (now().getType() != TokenType.RPARENT) {
+        if (now().getType() == TokenType.INTTK) {
             childrenNodes.add(FuncFParams());
         }
         handlePRARENTError(childrenNodes);
+        childrenNodes.add(Block());
         return new VNode(childrenNodes, NodeType.FuncDef);
     }
 
@@ -243,7 +258,6 @@ public class Parser {
                 System.out.printf("in line %d: missing ')' after '%s'%n", last().getLine(), last().getValue());
             }
         }
-        childrenNodes.add(Block());
     }
 
     private VNode MainFuncDef() {
@@ -253,6 +267,7 @@ public class Parser {
         childrenNodes.add(new VNode(expect(TokenType.MAINTK)));
         childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
         handlePRARENTError(childrenNodes);
+        childrenNodes.add(Block());
         return new VNode(childrenNodes, NodeType.MainFuncDef);
     }
 
@@ -374,6 +389,7 @@ public class Parser {
             }
         } else if (now().getType() == TokenType.FORTK) {
             // 'for' '(' [ForStmt] ';' [Cond] ';' [forStmt] ')' Stmt
+            // Fi(ForStmt) = Fi(LVal) = { IDENFR }
             childrenNodes.add(new VNode(expect(TokenType.FORTK)));
             childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
             if (now().getType() != TokenType.SEMICN) {
@@ -384,7 +400,7 @@ public class Parser {
                 childrenNodes.add(Cond());
             }
             handleSEMICNError(childrenNodes);
-            if (now().getType() != TokenType.RPARENT) {
+            if (now().getType() == TokenType.IDENFR) {
                 childrenNodes.add(ForStmt());
             }
             handlePRARENTError(childrenNodes);
@@ -408,7 +424,7 @@ public class Parser {
             // 'printf' '(' FormatString { ',' Exp } ')' ';'
             childrenNodes.add(new VNode(expect(TokenType.PRINTFTK)));
             childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-            childrenNodes.add(FormatString());
+            handleFormatStringError(childrenNodes);
             while (now().getType() == TokenType.COMMA) {
                 childrenNodes.add(new VNode(expect(TokenType.COMMA)));
                 childrenNodes.add(Exp());
@@ -513,10 +529,13 @@ public class Parser {
             childrenNodes.add(UnaryExp());
         } else if (now().getType() == TokenType.IDENFR && next(1).getType() == TokenType.LPARENT) {
             // Ident '(' [FuncRParams] ')'
+            // Fi(FuncRParams) = Fi(Exp) = Fi(AddExp) = Fi(MulExp) = Fi(UnaryExp)
+            // = Fi(PrimaryExp) | Fi(UnaryOp) | Fi(Ident)
+            // = { '(', IDENFR, INTCON, '+', '-', '!' }
             Token idenfrToken = expect(TokenType.IDENFR);
             childrenNodes.add(new VNode(idenfrToken));
             childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-            if (now().getType() != TokenType.RPARENT) {
+            if (FIRST.get(NodeType.FuncRParams).contains(now().getType())) {
                 childrenNodes.add(FuncRParams());
             }
             handlePRARENTError(childrenNodes);
@@ -628,7 +647,56 @@ public class Parser {
         return new VNode(expect(TokenType.INTCON));
     }
 
-    private VNode FormatString() {
-        return new VNode(expect(TokenType.STRCON));
+    private boolean isCharInRange(char ch) {
+        return ch == 32 || ch == 33 || (ch >= 40 && ch <= 126);
+    }
+
+    private void handleFormatStringError(List<VNode> childrenNodes) {
+        Token strToken = expect(TokenType.STRCON);
+        childrenNodes.add(new VNode(strToken));
+        String str = strToken.getValue();
+        if (str.startsWith("\"") && str.endsWith("\"")) {
+            str = str.substring(1, str.length() - 1);
+        } else {
+            if (Config.ERROR) {
+                errorHandler.addError(new Error(ErrorType.a, strToken.getLine()));
+            }
+            if (Config.DEBUG) {
+                System.out.printf("in line %d: '%s' is not a valid string constant%n", strToken.getLine(), str);
+            }
+            return;
+        }
+        for (int i = 0; i < str.length(); ++i) {
+            char ch = str.charAt(i);
+            if (ch == '\\') {
+                if (i + 1 >= str.length() || str.charAt(i + 1) != 'n') {
+                    if (Config.ERROR) {
+                        errorHandler.addError(new Error(ErrorType.a, strToken.getLine()));
+                    }
+                    if (Config.DEBUG) {
+                        System.out.printf("in line %d: '%s' is not a valid string constant%n", strToken.getLine(), str);
+                    }
+                    break;
+                }
+            } else if (ch == '%') {
+                if (i + 1 >= str.length() || str.charAt(i + 1) != 'd') {
+                    if (Config.ERROR) {
+                        errorHandler.addError(new Error(ErrorType.a, strToken.getLine()));
+                    }
+                    if (Config.DEBUG) {
+                        System.out.printf("in line %d: '%s' is not a valid string constant%n", strToken.getLine(), str);
+                    }
+                    break;
+                }
+            } else if (!isCharInRange(ch)) {
+                if (Config.ERROR) {
+                    errorHandler.addError(new Error(ErrorType.a, strToken.getLine()));
+                }
+                if (Config.DEBUG) {
+                    System.out.printf("in line %d: '%s' is not a valid string constant%n", strToken.getLine(), str);
+                }
+                break;
+            }
+        }
     }
 }
