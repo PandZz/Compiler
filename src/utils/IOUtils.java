@@ -11,6 +11,7 @@ public class IOUtils {
     private static final String OUTPUT_FILE = "output.txt";
     private static final String DEBUG_FILE = "debug.txt";
     private static final String ERROR_FILE = "error.txt";
+    private static final String IR_FILE = "llvm_ir.txt";
     private static StringJoiner buffer = new StringJoiner("\n");
     public static String readFile(String path) throws IOException {
         InputStream in = new BufferedInputStream(Files.newInputStream(Paths.get(path)));
@@ -49,6 +50,10 @@ public class IOUtils {
 
     public static void writeBuffer2Error() throws IOException {
         writeFile(ERROR_FILE, buffer.toString());
+    }
+
+    public static void writeBuffer2IR() throws IOException {
+        writeFile(IR_FILE, buffer.toString());
     }
 
     public static String readInput() throws IOException {

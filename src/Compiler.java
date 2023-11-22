@@ -2,6 +2,8 @@ import config.Config;
 import error.ErrorHandler;
 import frontend.Lexer;
 import frontend.Parser;
+import ir.IRModule;
+import ir.Vistor;
 import node.VNode;
 import token.Token;
 import utils.IOUtils;
@@ -27,13 +29,15 @@ public class Compiler {
             if (Config.ERROR) {
                 ErrorHandler errorHandler = ErrorHandler.getInstance();
                 errorHandler.CompUnitError(compUnitNode);
-                errorHandler.printErrors2Buffer();
+//                errorHandler.printErrors2Buffer();
             }
 
             // 打印
 //            compUnitNode.printToBuffer();
-            IOUtils.appendBuffer("");
-            IOUtils.writeBuffer2Error();
+            Vistor vistor = Vistor.getInstance();
+            vistor.visitCompUnit(compUnitNode);
+            IRModule.getInstance().print2Buffer();
+            IOUtils.writeBuffer2IR();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

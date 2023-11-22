@@ -30,9 +30,7 @@ bin/
 .DS_Store
 
 ### Custom ###
-testfile.txt
-output.txt
-error.txt
+*.txt
 test.ps1
 testdata/
 *.zip
