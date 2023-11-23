@@ -1,12 +1,12 @@
 package ir;
 
 import ir.type.IntType;
-import ir.value.BasicBlock;
-import ir.value.ConstInt;
-import ir.value.Function;
-import ir.value.Value;
+import ir.type.Type;
+import ir.value.*;
 import ir.value.instructions.Operator;
+import ir.value.instructions.mem.AllocaInst;
 import ir.value.instructions.terminator.RetInst;
+import node.NodeType;
 import node.VNode;
 import token.TokenType;
 
@@ -19,14 +19,21 @@ public class Vistor {
     private static Vistor instance = null;
     private final IRBuildFactory factory;
     private List<Map<String, Value>> symTlbs;
+    private List<Map<String, Integer>> constTlbs;
     private BasicBlock curBlk;
     private Function curFunc;
+    private boolean isConstExp;
+
     /**
      * 当前的临时变量编号, 注意这个编号在每个函数中都是从0开始的, 且编号还会分配给基本块
      */
     private Vistor() {
         factory = IRBuildFactory.getInstance();
         symTlbs = new ArrayList<>();
+        constTlbs = new ArrayList<>();
+        curBlk = null;
+        curFunc = null;
+        isConstExp = false;
     }
 
     public static Vistor getInstance() {
@@ -35,16 +42,52 @@ public class Vistor {
         return instance;
     }
 
+    private boolean isInGlobal() {
+        return curFunc == null;
+    }
+
     private void switchBlk() {
         curBlk = factory.createBasicBlock(curFunc);
+    }
+
+    private Value calc(Operator op, int l, int r) {
+        switch (op) {
+            case Add -> {
+                return new ConstInt(IntType.i32, l + r);
+            }
+            case Sub -> {
+                return new ConstInt(IntType.i32, l - r);
+            }
+            case Mul -> {
+                return new ConstInt(IntType.i32, l * r);
+            }
+            case Div -> {
+                return new ConstInt(IntType.i32, l / r);
+            }
+        }
+        return null;
+    }
+
+    private Value calc(Operator op, int val) {
+        switch (op) {
+            case Not -> {
+                return val == 0 ? ConstInt.ONE : ConstInt.ZERO;
+            }
+        }
+        return null;
     }
 
     private Map<String, Value> getCurSymTbl() {
         return symTlbs.get(symTlbs.size() - 1);
     }
 
+    private Map<String, Integer> getCurConstTbl() {
+        return constTlbs.get(constTlbs.size() - 1);
+    }
+
     /**
      * 递归地在符号表中寻找匹配的符号
+     *
      * @param name 符号的名字
      * @return value: Value | null
      */
@@ -56,16 +99,46 @@ public class Vistor {
         return null;
     }
 
+    private Integer findConst(String name) {
+        for (int i = constTlbs.size() - 1; i >= 0; i--) {
+            if (constTlbs.get(i).containsKey(name))
+                return constTlbs.get(i).get(name);
+        }
+        return null;
+    }
+
     private void addSymbol(String name, Value value) {
         getCurSymTbl().put(name, value);
+    }
+
+    private void addConst(String name, Integer value) {
+        getCurConstTbl().put(name, value);
     }
 
     private void pushSymTbl() {
         symTlbs.add(new HashMap<>());
     }
 
+    private void pushConstTbl() {
+        constTlbs.add(new HashMap<>());
+    }
+
+    private void pushTbl() {
+        pushSymTbl();
+        pushConstTbl();
+    }
+
     private void popSymTbl() {
         symTlbs.remove(symTlbs.size() - 1);
+    }
+
+    private void popConstTbl() {
+        constTlbs.remove(constTlbs.size() - 1);
+    }
+
+    private void popTbl() {
+        popSymTbl();
+        popConstTbl();
     }
 
     private final Map<String, TokenType> tokenTypeMap = new HashMap<>() {{
@@ -73,8 +146,10 @@ public class Vistor {
             put(tokenType.toString(), tokenType);
         }
     }};
+
     /**
      * 从语法树中的终结符节点获取其TokenType
+     *
      * @param endNode 终结符
      * @return TokenType枚举
      */
@@ -85,6 +160,7 @@ public class Vistor {
 
     /**
      * 从语法树中的终结符节点获取其值
+     *
      * @param endNode 终结符
      * @return 形如";"或"a"的字符串
      */
@@ -94,15 +170,135 @@ public class Vistor {
 
     // CompUnit → {Decl} {FuncDef} MainFuncDef
     public void visitCompUnit(VNode CompUnitNode) {
-        pushSymTbl();
+        pushTbl();
         for (VNode node : CompUnitNode.getChildrenNodes()) {
             switch (node.getNodeType()) {
-//                case Decl -> visitDecl(node);
+                case Decl -> {
+                    isConstExp = true;
+                    visitDecl(node);
+                    isConstExp = false;
+                }
 //                case FuncDef -> visitFuncDef(node);
                 case MainFuncDef -> visitMainFuncDef(node);
             }
         }
-        popSymTbl();
+        popTbl();
+    }
+
+    // Decl → ConstDecl | VarDecl
+    private void visitDecl(VNode declNode) {
+        switch (declNode.get1stChildNode().getNodeType()) {
+            // TODO: 这里有必要区分是全局变量还是局部变量(通过curFunc是否为null来判断)
+            case ConstDecl -> visitConstDecl(declNode.get1stChildNode());
+            case VarDecl -> visitVarDecl(declNode.get1stChildNode());
+        }
+    }
+
+    // ConstDecl → 'const' BType ConstDef { ',' ConstDef } ';'
+    private void visitConstDecl(VNode constDeclNode) {
+        VNode typeEndNode = constDeclNode.getChildNode(1).get1stChildNode();
+        TokenType endNodeTokenType = getEndNodeTokenType(typeEndNode);
+        Type type = null;
+        if (endNodeTokenType == TokenType.INTTK) {
+            type = IntType.i32;
+        }
+        for (VNode node : constDeclNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.ConstDef) {
+                visitConstDef(node, type);
+            }
+        }
+    }
+
+    // ConstDef → Ident { '[' ConstExp ']' } '=' ConstInitVal
+    private void visitConstDef(VNode constDefNode, Type type) {
+        String name = getEndNodeValue(constDefNode.get1stChildNode());
+        // TODO: 这里没有考虑数组
+        Value value = visitConstInitVal(constDefNode.getLastChildNode(), type);
+        if (isInGlobal()) {
+            GlobalVar globalVar = factory.createGlobalVar(name, type, true, value);
+            addSymbol(name, globalVar);
+            addConst(name, ((ConstInt) value).getValue());
+        } else {
+            AllocaInst allocaInst = factory.createLocalVar(curBlk, value, type);
+            addSymbol(name, allocaInst);
+            if (isConstExp) {
+                addConst(name, ((ConstInt) value).getValue());
+            }
+        }
+    }
+
+    // ConstInitVal → ConstExp | '{' [ ConstInitVal { ',' ConstInitVal } ] '}'
+    private Value visitConstInitVal(VNode constInitValNode, Type type) {
+        if (constInitValNode.getChildrenNodes().size() == 1) {
+            // ConstInitVal → ConstExp
+            return visitConstExp(constInitValNode.get1stChildNode());
+        }
+        // ConstInitVal → '{' [ ConstInitVal { ',' ConstInitVal } ] '}'
+        // TODO: 这里没有考虑数组
+        return null;
+    }
+
+    // ConstExp → AddExp
+    private Value visitConstExp(VNode constExpNode) {
+        Value value = visitAddExp(constExpNode.get1stChildNode());
+        return value;
+    }
+
+    // VarDecl → BType VarDef { ',' VarDef } ';'
+    private void visitVarDecl(VNode varDeclNode) {
+        VNode typeEndNode = varDeclNode.getChildNode(0).get1stChildNode();
+        TokenType endNodeTokenType = getEndNodeTokenType(typeEndNode);
+        Type type = null;
+        if (endNodeTokenType == TokenType.INTTK) {
+            type = IntType.i32;
+        }
+        for (VNode node : varDeclNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.VarDef) {
+                visitVarDef(node, type);
+            }
+        }
+    }
+
+    // VarDef → Ident { '[' ConstExp ']' } | Ident { '[' ConstExp ']' } '=' InitVal
+    private void visitVarDef(VNode varDefNode, Type type) {
+        String name = getEndNodeValue(varDefNode.get1stChildNode());
+        // TODO: 这里没有考虑数组
+        VNode lastChildNode = varDefNode.getLastChildNode();
+        if (lastChildNode.getNodeType() == NodeType.InitVal) {
+            // VarDef → Ident { '[' ConstExp ']' } '=' InitVal
+            Value value = visitInitVal(lastChildNode, type);
+            if (isInGlobal()) {
+                GlobalVar globalVar = factory.createGlobalVar(name, type, true, value);
+                addSymbol(name, globalVar);
+                addConst(name, ((ConstInt) value).getValue());
+            } else {
+                AllocaInst allocaInst = factory.createLocalVar(curBlk, value, type);
+                addSymbol(name, allocaInst);
+                if (isConstExp) {
+                    addConst(name, ((ConstInt) value).getValue());
+                }
+            }
+        } else {
+            // VarDef → Ident { '[' ConstExp ']' }
+            if (isInGlobal()) {
+                GlobalVar globalVar = factory.createGlobalVar(name, type, true, null);
+                addSymbol(name, globalVar);
+            } else {
+                AllocaInst allocaInst = factory.createLocalVar(curBlk, null, type);
+                addSymbol(name, allocaInst);
+            }
+        }
+    }
+
+    // InitVal → Exp | '{' [ InitVal { ',' InitVal } ] '}'
+    private Value visitInitVal(VNode initValNode, Type type) {
+        if (initValNode.getChildrenNodes().size() == 1) {
+            // InitVal → Exp
+            return visitExp(initValNode.get1stChildNode());
+        }
+        // InitVal → '{' [ InitVal { ',' InitVal } ] '}'
+        // TODO: 这里没有考虑数组
+        return null;
     }
 
     // MainFuncDef → 'int' 'main' '(' ')' Block
@@ -118,19 +314,19 @@ public class Vistor {
 
     // Block → '{' { BlockItem } '}'
     private void visitBlock(VNode blockNode) {
-        pushSymTbl();
+        pushTbl();
         for (VNode node : blockNode.getChildrenNodes()) {
             switch (node.getNodeType()) {
                 case BlockItem -> visitBlockItem(node);
             }
         }
-        popSymTbl();
+        popTbl();
     }
 
     // BlockItem → Decl | Stmt
     private void visitBlockItem(VNode blockItemNode) {
         switch (blockItemNode.get1stChildNode().getNodeType()) {
-//            case Decl -> visitDecl(blockItemNode.get1stChildNode());
+            case Decl -> visitDecl(blockItemNode.get1stChildNode());
             case Stmt -> visitStmt(blockItemNode.get1stChildNode());
         }
     }
@@ -147,9 +343,16 @@ public class Vistor {
     private void visitStmt(VNode stmtNode) {
         VNode firstChildNode = stmtNode.get1stChildNode();
         switch (firstChildNode.getNodeType()) {
-//            case LVal -> visitLVal(firstChildNode);
-//            case Exp -> visitExp(firstChildNode);
-//            case Block -> visitBlock(firstChildNode);
+            case LVal -> {
+                if (stmtNode.getChildrenNodes().size() == 4) {
+                    // LVal '=' Exp ';'
+                    Value lVal = visitLVal(firstChildNode);
+                    Value expValue = visitExp(stmtNode.getChildNode(2));
+                    factory.createStoreInst(curBlk, lVal, expValue);
+                }
+            }
+            case Exp -> visitExp(firstChildNode);
+            case Block -> visitBlock(firstChildNode);
             case EndNode -> {
                 TokenType tokenType = getEndNodeTokenType(firstChildNode);
                 switch (tokenType) {
@@ -173,7 +376,8 @@ public class Vistor {
 
     // Exp → AddExp
     private Value visitExp(VNode expNode) {
-        return visitAddExp(expNode.get1stChildNode());
+        Value value = visitAddExp(expNode.get1stChildNode());
+        return value;
     }
 
     // AddExp → MulExp | MulExp ('+' | '−') AddExp
@@ -190,7 +394,7 @@ public class Vistor {
             case PLUS -> op = Operator.Add;
             case MINU -> op = Operator.Sub;
         }
-        return factory.createBinaryInst(curBlk, op, mulExpValue, addExpValue);
+        return isConstExp ? calc(op, ((ConstInt) mulExpValue).getValue(), ((ConstInt) addExpValue).getValue()) : factory.createBinaryInst(curBlk, op, mulExpValue, addExpValue);
     }
 
     // MulExp → UnaryExp | UnaryExp ('*' | '/' | '%') MulExp
@@ -208,7 +412,7 @@ public class Vistor {
             case DIV -> op = Operator.Div;
             case MOD -> op = Operator.Mod;
         }
-        return factory.createBinaryInst(curBlk, op, unaryExpValue, mulExpValue);
+        return isConstExp ? calc(op, ((ConstInt) unaryExpValue).getValue(), ((ConstInt) mulExpValue).getValue()) : factory.createBinaryInst(curBlk, op, unaryExpValue, mulExpValue);
     }
 
     // UnaryExp → PrimaryExp | Ident '(' [FuncRParams] ')' | UnaryOp UnaryExp
@@ -222,14 +426,21 @@ public class Vistor {
             VNode unaryOpNode = unaryExpNode.get1stChildNode();
             TokenType tokenType = getEndNodeTokenType(unaryOpNode.get1stChildNode());
             Operator op = null;
+            Value value = visitUnaryExp(unaryExpNode.getChildNode(1));
             switch (tokenType) {
                 case PLUS -> op = Operator.Add;
                 case MINU -> op = Operator.Sub;
                 case NOT -> {
-                    return factory.createNotInst(curBlk, visitUnaryExp(unaryExpNode.getChildNode(1)));
+                    op = Operator.Not;
+                    return isConstExp ? calc(op, ((ConstInt) value).getValue()) : factory.createNotInst(curBlk, value);
                 }
             }
-            return factory.createBinaryInst(curBlk, op, ConstInt.ZERO, visitUnaryExp(unaryExpNode.getChildNode(1)));
+            if (isConstExp) {
+                assert op != null;
+                return calc(op, 0, ((ConstInt) value).getValue());
+            } else {
+                return factory.createBinaryInst(curBlk, op, ConstInt.ZERO, value);
+            }
         }
         // UnaryExp → Ident '(' [FuncRParams] ')'
         String funcName = getEndNodeValue(unaryExpNode.get1stChildNode());
@@ -245,8 +456,10 @@ public class Vistor {
             VNode firstChildNode = primaryExpNode.get1stChildNode();
             switch (firstChildNode.getNodeType()) {
                 case LVal -> {
-                    String lValName = getEndNodeValue(firstChildNode);
-                    return findSym(lValName);
+                    Value value = visitLVal(firstChildNode);
+                    if (isConstExp)
+                        return value;
+                    return factory.createLoadInst(curBlk, value);
                 }
                 case Number -> {
                     String numberStr = getEndNodeValue(firstChildNode.get1stChildNode());
@@ -256,5 +469,19 @@ public class Vistor {
         }
         // PrimaryExp → '(' Exp ')'
         return visitExp(primaryExpNode.getChildNode(1));
+    }
+
+    // LVal → Ident {'[' Exp ']'}
+    private Value visitLVal(VNode lValNode) {
+        String name = getEndNodeValue(lValNode.get1stChildNode());
+        if (lValNode.getChildrenNodes().size() == 1) {
+            // LVal → Ident
+            if (isConstExp)
+                return new ConstInt(IntType.i32, findConst(name));
+            return findSym(name);
+        }
+        // LVal → Ident {'[' Exp ']'}
+        // TODO: 这里没有考虑数组
+        return null;
     }
 }

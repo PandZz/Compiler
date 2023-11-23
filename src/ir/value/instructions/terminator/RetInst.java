@@ -4,7 +4,7 @@ import ir.type.VoidType;
 import ir.value.Value;
 import ir.value.instructions.Operator;
 
-public class RetInst extends TerminatorInst{
+public class RetInst extends TerminatorInst {
     public RetInst() {
         super(VoidType.voidType, Operator.Ret);
     }

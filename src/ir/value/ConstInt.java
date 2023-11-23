@@ -6,6 +6,7 @@ import ir.type.Type;
 public class ConstInt extends Const {
     private int value;
     public static final ConstInt ZERO = new ConstInt(IntType.i32, 0);
+    public static final ConstInt ONE = new ConstInt(IntType.i32, 1);
     public ConstInt(Type type, int value) {
         super(String.valueOf(value), type);
         this.value = value;
@@ -13,5 +14,10 @@ public class ConstInt extends Const {
 
     public int getValue() {
         return value;
+    }
+
+    @Override
+    public String toString() {
+        return "i32 " + this.value;
     }
 }
