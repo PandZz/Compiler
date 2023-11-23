@@ -3,7 +3,21 @@ package ir.value.instructions;
 import ir.type.Type;
 import ir.value.Value;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class BinaryInst extends Instruction {
+    private static final Map<Operator, String> opMap = new HashMap<>() {{
+        put(Operator.Add, "add");
+        put(Operator.Sub, "sub");
+        put(Operator.Mul, "mul");
+        put(Operator.Div, "sdiv");
+        put(Operator.Mod, "srem");
+        put(Operator.Shl, "shl");
+        put(Operator.Shr, "ashr");
+        put(Operator.And, "and");
+        put(Operator.Or, "or");
+    }};
     public BinaryInst(Type type, Operator op, Value lhs, Value rhs) {
         super(type, op);
         addOperand(lhs);
@@ -22,6 +36,6 @@ public class BinaryInst extends Instruction {
 
     @Override
     public String toString() {
-        return getName() + " = " + getOp().toString().toLowerCase() + " " + getLHS().getType() + " " + getLHS().getName() + ", " + getRHS().getName();
+        return getName() + " = " + opMap.get(getOp()) + " " + getLHS().getType() + " " + getLHS().getName() + ", " + getRHS().getName();
     }
 }

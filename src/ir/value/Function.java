@@ -9,10 +9,13 @@ import java.util.List;
 
 public class Function extends User {
     // TODO: 这里只考虑了main函数, 且其无参
+    private final boolean isLibrary;
     private List<Argument> args;
     private List<BasicBlock> basicBlocks;
-    public Function(String name, Type returnType, List<Type> paramTypes) {
+
+    public Function(String name, Type returnType, List<Type> paramTypes, boolean isLibrary) {
         super(name, new FunctionType(returnType, paramTypes));
+        this.isLibrary = isLibrary;
         args = new ArrayList<>();
         for (Type type : paramTypes) {
             Argument arg = new Argument(type);
@@ -28,19 +31,41 @@ public class Function extends User {
         addOperand(basicBlock);
     }
 
+    public List<Argument> getArgs() {
+        return args;
+    }
+
+    public List<BasicBlock> getBasicBlocks() {
+        return basicBlocks;
+    }
+
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("define dso_local " + ((FunctionType) getType()).getReturnType().toString() + " @" + getName() + "(");
+        StringBuilder sb = new StringBuilder();
+        if (isLibrary)
+            sb.append("declare ");
+        else
+            sb.append("define dso_local ");
+        sb.append(((FunctionType) getType()).getReturnType().toString())
+                .append(" @")
+                .append(getName())
+                .append("(");
         for (int i = 0; i < args.size(); i++) {
-            sb.append(args.get(i).getType().toString()).append(" ").append(args.get(i).getName());
+            sb.append(args.get(i).getType().toString());
+            if (!isLibrary)
+                sb.append(" ").append(args.get(i).getName());
             if (i != args.size() - 1)
                 sb.append(", ");
         }
-        sb.append(") {\n");
-        for (BasicBlock basicBlock : basicBlocks) {
-            sb.append(basicBlock.toString());
+        if (basicBlocks.isEmpty())
+            sb.append(")");
+        else {
+            sb.append(") {\n");
+            for (BasicBlock basicBlock : basicBlocks) {
+                sb.append(basicBlock.toString());
+            }
+            sb.append("}\n");
         }
-        sb.append("}\n");
         return sb.toString();
     }
 }

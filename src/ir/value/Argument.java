@@ -1,5 +1,6 @@
 package ir.value;
 
+import ir.type.PointerType;
 import ir.type.Type;
 
 public class Argument extends User{

@@ -373,86 +373,94 @@ public class Parser {
          * Fi(LVal) = {IDENFR}
          */
         List<VNode> childrenNodes = new ArrayList<>();
-        if (now().getType() == TokenType.LBRACE) {
-            // Block
-            childrenNodes.add(Block());
-        } else if (now().getType() == TokenType.IFTK) {
-            // 'if' '(' Cond ')' Stmt [ 'else' Stmt ]
-            childrenNodes.add(new VNode(expect(TokenType.IFTK)));
-            childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-            childrenNodes.add(Cond());
-            handlePRARENTError(childrenNodes);
-            childrenNodes.add(Stmt());
-            if (now().getType() == TokenType.ELSETK) {
-                childrenNodes.add(new VNode(expect(TokenType.ELSETK)));
+        switch (now().getType()) {
+            case LBRACE -> {
+                // Block
+                childrenNodes.add(Block());
+            }
+            case IFTK -> {
+                // 'if' '(' Cond ')' Stmt [ 'else' Stmt ]
+                childrenNodes.add(new VNode(expect(TokenType.IFTK)));
+                childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
+                childrenNodes.add(Cond());
+                handlePRARENTError(childrenNodes);
+                childrenNodes.add(Stmt());
+                if (now().getType() == TokenType.ELSETK) {
+                    childrenNodes.add(new VNode(expect(TokenType.ELSETK)));
+                    childrenNodes.add(Stmt());
+                }
+            }
+            case FORTK -> {
+                // 'for' '(' [ForStmt] ';' [Cond] ';' [forStmt] ')' Stmt
+                // Fi(ForStmt) = Fi(LVal) = { IDENFR }
+                childrenNodes.add(new VNode(expect(TokenType.FORTK)));
+                childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
+                if (now().getType() != TokenType.SEMICN) {
+                    childrenNodes.add(ForStmt());
+                }
+                handleSEMICNError(childrenNodes);
+                if (now().getType() != TokenType.SEMICN) {
+                    childrenNodes.add(Cond());
+                }
+                handleSEMICNError(childrenNodes);
+                if (now().getType() == TokenType.IDENFR) {
+                    childrenNodes.add(ForStmt());
+                }
+                handlePRARENTError(childrenNodes);
                 childrenNodes.add(Stmt());
             }
-        } else if (now().getType() == TokenType.FORTK) {
-            // 'for' '(' [ForStmt] ';' [Cond] ';' [forStmt] ')' Stmt
-            // Fi(ForStmt) = Fi(LVal) = { IDENFR }
-            childrenNodes.add(new VNode(expect(TokenType.FORTK)));
-            childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-            if (now().getType() != TokenType.SEMICN) {
-                childrenNodes.add(ForStmt());
-            }
-            handleSEMICNError(childrenNodes);
-            if (now().getType() != TokenType.SEMICN) {
-                childrenNodes.add(Cond());
-            }
-            handleSEMICNError(childrenNodes);
-            if (now().getType() == TokenType.IDENFR) {
-                childrenNodes.add(ForStmt());
-            }
-            handlePRARENTError(childrenNodes);
-            childrenNodes.add(Stmt());
-        } else if (now().getType() == TokenType.BREAKTK || now().getType() == TokenType.CONTINUETK) {
-            // 'break' ';' | 'continue' ';'
-            if (now().getType() == TokenType.BREAKTK) {
-                childrenNodes.add(new VNode(expect(TokenType.BREAKTK)));
-            } else {
-                childrenNodes.add(new VNode(expect(TokenType.CONTINUETK)));
-            }
-            handleSEMICNError(childrenNodes);
-        } else if (now().getType() == TokenType.RETURNTK) {
-            // 'return' [Exp] ';'
-            childrenNodes.add(new VNode(expect(TokenType.RETURNTK)));
-            if (now().getType() != TokenType.SEMICN) {
-                childrenNodes.add(Exp());
-            }
-            handleSEMICNError(childrenNodes);
-        } else if (now().getType() == TokenType.PRINTFTK) {
-            // 'printf' '(' FormatString { ',' Exp } ')' ';'
-            childrenNodes.add(new VNode(expect(TokenType.PRINTFTK)));
-            childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-            handleFormatStringError(childrenNodes);
-            while (now().getType() == TokenType.COMMA) {
-                childrenNodes.add(new VNode(expect(TokenType.COMMA)));
-                childrenNodes.add(Exp());
-            }
-            handlePRARENTError(childrenNodes);
-            handleSEMICNError(childrenNodes);
-        } else {
-            if (hasAssignInLine()) {
-                // LVal '=' Exp ';' | LVal '=' 'getint' '(' ')' ';'
-                childrenNodes.add(LVal());
-                childrenNodes.add(new VNode(expect(TokenType.ASSIGN)));
-                if (now().getType() == TokenType.GETINTTK) {
-                    // LVal '=' 'getint' '(' ')' ';'
-                    childrenNodes.add(new VNode(expect(TokenType.GETINTTK)));
-                    childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-                    handlePRARENTError(childrenNodes);
-                    handleSEMICNError(childrenNodes);
+            case BREAKTK, CONTINUETK -> {
+                // 'break' ';' | 'continue' ';'
+                if (now().getType() == TokenType.BREAKTK) {
+                    childrenNodes.add(new VNode(expect(TokenType.BREAKTK)));
                 } else {
-                    // LVal '=' Exp ';'
-                    childrenNodes.add(Exp());
-                    handleSEMICNError(childrenNodes);
+                    childrenNodes.add(new VNode(expect(TokenType.CONTINUETK)));
                 }
-            } else {
-                // [Exp] ';'
+                handleSEMICNError(childrenNodes);
+            }
+            case RETURNTK -> {
+                // 'return' [Exp] ';'
+                childrenNodes.add(new VNode(expect(TokenType.RETURNTK)));
                 if (now().getType() != TokenType.SEMICN) {
                     childrenNodes.add(Exp());
                 }
                 handleSEMICNError(childrenNodes);
+            }
+            case PRINTFTK -> {
+                // 'printf' '(' FormatString { ',' Exp } ')' ';'
+                childrenNodes.add(new VNode(expect(TokenType.PRINTFTK)));
+                childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
+                handleFormatStringError(childrenNodes);
+                while (now().getType() == TokenType.COMMA) {
+                    childrenNodes.add(new VNode(expect(TokenType.COMMA)));
+                    childrenNodes.add(Exp());
+                }
+                handlePRARENTError(childrenNodes);
+                handleSEMICNError(childrenNodes);
+            }
+            default -> {
+                if (hasAssignInLine()) {
+                    // LVal '=' Exp ';' | LVal '=' 'getint' '(' ')' ';'
+                    childrenNodes.add(LVal());
+                    childrenNodes.add(new VNode(expect(TokenType.ASSIGN)));
+                    if (now().getType() == TokenType.GETINTTK) {
+                        // LVal '=' 'getint' '(' ')' ';'
+                        childrenNodes.add(new VNode(expect(TokenType.GETINTTK)));
+                        childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
+                        handlePRARENTError(childrenNodes);
+                        handleSEMICNError(childrenNodes);
+                    } else {
+                        // LVal '=' Exp ';'
+                        childrenNodes.add(Exp());
+                        handleSEMICNError(childrenNodes);
+                    }
+                } else {
+                    // [Exp] ';'
+                    if (now().getType() != TokenType.SEMICN) {
+                        childrenNodes.add(Exp());
+                    }
+                    handleSEMICNError(childrenNodes);
+                }
             }
         }
         return new VNode(childrenNodes, NodeType.Stmt);
@@ -497,14 +505,18 @@ public class Parser {
     private VNode PrimaryExp() {
         // PrimaryExp → '(' Exp ')' | LVal | Number
         List<VNode> childrenNodes = new ArrayList<>();
-        if (now().getType() == TokenType.LPARENT) {
-            childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
-            childrenNodes.add(Exp());
-            handlePRARENTError(childrenNodes);
-        } else if (now().getType() == TokenType.IDENFR) {
-            childrenNodes.add(LVal());
-        } else {
-            childrenNodes.add(Number());
+        switch (now().getType()) {
+            case LPARENT -> {
+                childrenNodes.add(new VNode(expect(TokenType.LPARENT)));
+                childrenNodes.add(Exp());
+                handlePRARENTError(childrenNodes);
+            }
+            case IDENFR -> {
+                childrenNodes.add(LVal());
+            }
+            case INTCON -> {
+                childrenNodes.add(Number());
+            }
         }
         return new VNode(childrenNodes, NodeType.PrimaryExp);
     }
@@ -549,12 +561,10 @@ public class Parser {
     private VNode UnaryOp() {
         // UnaryOp → '+' | '−' | '!'
         List<VNode> childrenNodes = new ArrayList<>();
-        if (now().getType() == TokenType.PLUS) {
-            childrenNodes.add(new VNode(expect(TokenType.PLUS)));
-        } else if (now().getType() == TokenType.MINU) {
-            childrenNodes.add(new VNode(expect(TokenType.MINU)));
-        } else {
-            childrenNodes.add(new VNode(expect(TokenType.NOT)));
+        switch (now().getType()) {
+            case PLUS -> childrenNodes.add(new VNode(expect(TokenType.PLUS)));
+            case MINU -> childrenNodes.add(new VNode(expect(TokenType.MINU)));
+            case NOT -> childrenNodes.add(new VNode(expect(TokenType.NOT)));
         }
         return new VNode(childrenNodes, NodeType.UnaryOp);
     }
@@ -574,66 +584,90 @@ public class Parser {
         // MulExp → UnaryExp | MulExp ('*' | '/' | '%') UnaryExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(UnaryExp());
-        if (now().getType() == TokenType.MULT || now().getType() == TokenType.DIV || now().getType() == TokenType.MOD) {
+        VNode mulExpRetNode = new VNode(childrenNodes, NodeType.MulExp);
+        while (now().getType() == TokenType.MULT || now().getType() == TokenType.DIV || now().getType() == TokenType.MOD) {
+            childrenNodes.clear();
+            childrenNodes.add(mulExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(MulExp());
+            childrenNodes.add(UnaryExp());
+            mulExpRetNode = new VNode(childrenNodes, NodeType.MulExp);
         }
-        return new VNode(childrenNodes, NodeType.MulExp);
+        return mulExpRetNode;
     }
 
     private VNode AddExp() {
         // AddExp → MulExp | AddExp ('+' | '−') MulExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(MulExp());
-        if (now().getType() == TokenType.PLUS || now().getType() == TokenType.MINU) {
+        VNode addExpRetNode = new VNode(childrenNodes, NodeType.AddExp);
+        while (now().getType() == TokenType.PLUS || now().getType() == TokenType.MINU) {
+            childrenNodes.clear();
+            childrenNodes.add(addExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(AddExp());
+            childrenNodes.add(MulExp());
+            addExpRetNode = new VNode(childrenNodes, NodeType.AddExp);
         }
-        return new VNode(childrenNodes, NodeType.AddExp);
+        return addExpRetNode;
     }
 
     private VNode RelExp() {
         // RelExp → AddExp | RelExp ('<' | '>' | '<=' | '>=') AddExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(AddExp());
-        if (now().getType() == TokenType.LSS || now().getType() == TokenType.GRE || now().getType() == TokenType.LEQ || now().getType() == TokenType.GEQ) {
+        VNode relExpRetNode = new VNode(childrenNodes, NodeType.RelExp);
+        while (now().getType() == TokenType.LSS || now().getType() == TokenType.GRE || now().getType() == TokenType.LEQ || now().getType() == TokenType.GEQ) {
+            childrenNodes.clear();
+            childrenNodes.add(relExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(RelExp());
+            childrenNodes.add(AddExp());
+            relExpRetNode = new VNode(childrenNodes, NodeType.RelExp);
         }
-        return new VNode(childrenNodes, NodeType.RelExp);
+        return relExpRetNode;
     }
 
     private VNode EqExp() {
         // EqExp → RelExp | EqExp ('==' | '!=') RelExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(RelExp());
-        if (now().getType() == TokenType.EQL || now().getType() == TokenType.NEQ) {
+        VNode eqExpRetNode = new VNode(childrenNodes, NodeType.EqExp);
+        while (now().getType() == TokenType.EQL || now().getType() == TokenType.NEQ) {
+            childrenNodes.clear();
+            childrenNodes.add(eqExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(EqExp());
+            childrenNodes.add(RelExp());
+            eqExpRetNode = new VNode(childrenNodes, NodeType.EqExp);
         }
-        return new VNode(childrenNodes, NodeType.EqExp);
+        return eqExpRetNode;
     }
 
     private VNode LAndExp() {
         // LAndExp → EqExp | LAndExp '&&' EqExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(EqExp());
-        if (now().getType() == TokenType.AND) {
+        VNode lAndExpRetNode = new VNode(childrenNodes, NodeType.LAndExp);
+        while (now().getType() == TokenType.AND) {
+            childrenNodes.clear();
+            childrenNodes.add(lAndExpRetNode);
             childrenNodes.add(new VNode(expect(TokenType.AND)));
-            childrenNodes.add(LAndExp());
+            childrenNodes.add(EqExp());
+            lAndExpRetNode = new VNode(childrenNodes, NodeType.LAndExp);
         }
-        return new VNode(childrenNodes, NodeType.LAndExp);
+        return lAndExpRetNode;
     }
 
     private VNode LOrExp() {
         // LOrExp → LAndExp | LOrExp '||' LAndExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(LAndExp());
-        if (now().getType() == TokenType.OR) {
+        VNode lOrExpRetNode = new VNode(childrenNodes, NodeType.LOrExp);
+        while (now().getType() == TokenType.OR) {
+            childrenNodes.clear();
+            childrenNodes.add(lOrExpRetNode);
             childrenNodes.add(new VNode(expect(TokenType.OR)));
-            childrenNodes.add(LOrExp());
+            childrenNodes.add(LAndExp());
+            lOrExpRetNode = new VNode(childrenNodes, NodeType.LOrExp);
         }
-        return new VNode(childrenNodes, NodeType.LOrExp);
+        return lOrExpRetNode;
     }
 
     private VNode ConstExp() {
