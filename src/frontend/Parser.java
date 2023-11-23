@@ -574,66 +574,90 @@ public class Parser {
         // MulExp → UnaryExp | MulExp ('*' | '/' | '%') UnaryExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(UnaryExp());
-        if (now().getType() == TokenType.MULT || now().getType() == TokenType.DIV || now().getType() == TokenType.MOD) {
+        VNode mulExpRetNode = new VNode(childrenNodes, NodeType.MulExp);
+        while (now().getType() == TokenType.MULT || now().getType() == TokenType.DIV || now().getType() == TokenType.MOD) {
+            childrenNodes.clear();
+            childrenNodes.add(mulExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(MulExp());
+            childrenNodes.add(UnaryExp());
+            mulExpRetNode = new VNode(childrenNodes, NodeType.MulExp);
         }
-        return new VNode(childrenNodes, NodeType.MulExp);
+        return mulExpRetNode;
     }
 
     private VNode AddExp() {
         // AddExp → MulExp | AddExp ('+' | '−') MulExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(MulExp());
-        if (now().getType() == TokenType.PLUS || now().getType() == TokenType.MINU) {
+        VNode addExpRetNode = new VNode(childrenNodes, NodeType.AddExp);
+        while (now().getType() == TokenType.PLUS || now().getType() == TokenType.MINU) {
+            childrenNodes.clear();
+            childrenNodes.add(addExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(AddExp());
+            childrenNodes.add(MulExp());
+            addExpRetNode = new VNode(childrenNodes, NodeType.AddExp);
         }
-        return new VNode(childrenNodes, NodeType.AddExp);
+        return addExpRetNode;
     }
 
     private VNode RelExp() {
         // RelExp → AddExp | RelExp ('<' | '>' | '<=' | '>=') AddExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(AddExp());
-        if (now().getType() == TokenType.LSS || now().getType() == TokenType.GRE || now().getType() == TokenType.LEQ || now().getType() == TokenType.GEQ) {
+        VNode relExpRetNode = new VNode(childrenNodes, NodeType.RelExp);
+        while (now().getType() == TokenType.LSS || now().getType() == TokenType.GRE || now().getType() == TokenType.LEQ || now().getType() == TokenType.GEQ) {
+            childrenNodes.clear();
+            childrenNodes.add(relExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(RelExp());
+            childrenNodes.add(AddExp());
+            relExpRetNode = new VNode(childrenNodes, NodeType.RelExp);
         }
-        return new VNode(childrenNodes, NodeType.RelExp);
+        return relExpRetNode;
     }
 
     private VNode EqExp() {
         // EqExp → RelExp | EqExp ('==' | '!=') RelExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(RelExp());
-        if (now().getType() == TokenType.EQL || now().getType() == TokenType.NEQ) {
+        VNode eqExpRetNode = new VNode(childrenNodes, NodeType.EqExp);
+        while (now().getType() == TokenType.EQL || now().getType() == TokenType.NEQ) {
+            childrenNodes.clear();
+            childrenNodes.add(eqExpRetNode);
             childrenNodes.add(new VNode(expect(now().getType())));
-            childrenNodes.add(EqExp());
+            childrenNodes.add(RelExp());
+            eqExpRetNode = new VNode(childrenNodes, NodeType.EqExp);
         }
-        return new VNode(childrenNodes, NodeType.EqExp);
+        return eqExpRetNode;
     }
 
     private VNode LAndExp() {
         // LAndExp → EqExp | LAndExp '&&' EqExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(EqExp());
-        if (now().getType() == TokenType.AND) {
+        VNode lAndExpRetNode = new VNode(childrenNodes, NodeType.LAndExp);
+        while (now().getType() == TokenType.AND) {
+            childrenNodes.clear();
+            childrenNodes.add(lAndExpRetNode);
             childrenNodes.add(new VNode(expect(TokenType.AND)));
-            childrenNodes.add(LAndExp());
+            childrenNodes.add(EqExp());
+            lAndExpRetNode = new VNode(childrenNodes, NodeType.LAndExp);
         }
-        return new VNode(childrenNodes, NodeType.LAndExp);
+        return lAndExpRetNode;
     }
 
     private VNode LOrExp() {
         // LOrExp → LAndExp | LOrExp '||' LAndExp
         List<VNode> childrenNodes = new ArrayList<>();
         childrenNodes.add(LAndExp());
-        if (now().getType() == TokenType.OR) {
+        VNode lOrExpRetNode = new VNode(childrenNodes, NodeType.LOrExp);
+        while (now().getType() == TokenType.OR) {
+            childrenNodes.clear();
+            childrenNodes.add(lOrExpRetNode);
             childrenNodes.add(new VNode(expect(TokenType.OR)));
-            childrenNodes.add(LOrExp());
+            childrenNodes.add(LAndExp());
+            lOrExpRetNode = new VNode(childrenNodes, NodeType.LOrExp);
         }
-        return new VNode(childrenNodes, NodeType.LOrExp);
+        return lOrExpRetNode;
     }
 
     private VNode ConstExp() {

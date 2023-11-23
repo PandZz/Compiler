@@ -69,7 +69,8 @@ public class ErrorHandler {
      * @return 形如";"或"a"的字符串
      */
     private String getEndNodeValue(VNode endNode) {
-        return endNode.getValue().split(" ")[1];
+        String s = endNode.getValue();
+        return s.substring(s.indexOf(" ") + 1);
     }
 
     // CompUnit → {Decl} {FuncDef} MainFuncDef

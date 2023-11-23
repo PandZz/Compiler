@@ -15,7 +15,7 @@ public class BasicBlock extends User {
         Instruction inst;
         for (Value value : operands) {
             inst = (Instruction) value;
-            sb.append(inst.toString()).append("\n");
+            sb.append("  ").append(inst.toString()).append("\n");
         }
         return sb.toString();
     }

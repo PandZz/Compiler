@@ -2,13 +2,16 @@ package ir;
 
 import ir.type.IntType;
 import ir.type.Type;
+import ir.type.VoidType;
 import ir.value.*;
+import ir.value.instructions.CallInst;
 import ir.value.instructions.Operator;
 import ir.value.instructions.mem.AllocaInst;
 import ir.value.instructions.terminator.RetInst;
 import node.NodeType;
 import node.VNode;
 import token.TokenType;
+import utils.Pair;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -89,7 +92,7 @@ public class Vistor {
      * 递归地在符号表中寻找匹配的符号
      *
      * @param name 符号的名字
-     * @return value: Value | null
+     * @return value: Value | null, 这里的Value可能是Function, GlobalVar, AllocaInst, Argument
      */
     private Value findSym(String name) {
         for (int i = symTlbs.size() - 1; i >= 0; i--) {
@@ -165,12 +168,18 @@ public class Vistor {
      * @return 形如";"或"a"的字符串
      */
     private String getEndNodeValue(VNode endNode) {
-        return endNode.getValue().split(" ")[1];
+        String s = endNode.getValue();
+        return s.substring(s.indexOf(" ") + 1);
     }
 
     // CompUnit → {Decl} {FuncDef} MainFuncDef
     public void visitCompUnit(VNode CompUnitNode) {
         pushTbl();
+        List<Type> paramTypes = new ArrayList<>();
+        addSymbol("getint", factory.createLibraryFunction("getint", IntType.i32, paramTypes));
+        paramTypes.add(IntType.i32);
+        addSymbol("putint", factory.createLibraryFunction("putint", VoidType.voidType, paramTypes));
+        addSymbol("putch", factory.createLibraryFunction("putch", VoidType.voidType, paramTypes));
         for (VNode node : CompUnitNode.getChildrenNodes()) {
             switch (node.getNodeType()) {
                 case Decl -> {
@@ -178,7 +187,7 @@ public class Vistor {
                     visitDecl(node);
                     isConstExp = false;
                 }
-//                case FuncDef -> visitFuncDef(node);
+                case FuncDef -> visitFuncDef(node);
                 case MainFuncDef -> visitMainFuncDef(node);
             }
         }
@@ -268,7 +277,7 @@ public class Vistor {
             // VarDef → Ident { '[' ConstExp ']' } '=' InitVal
             Value value = visitInitVal(lastChildNode, type);
             if (isInGlobal()) {
-                GlobalVar globalVar = factory.createGlobalVar(name, type, true, value);
+                GlobalVar globalVar = factory.createGlobalVar(name, type, false, value);
                 addSymbol(name, globalVar);
                 addConst(name, ((ConstInt) value).getValue());
             } else {
@@ -281,7 +290,7 @@ public class Vistor {
         } else {
             // VarDef → Ident { '[' ConstExp ']' }
             if (isInGlobal()) {
-                GlobalVar globalVar = factory.createGlobalVar(name, type, true, null);
+                GlobalVar globalVar = factory.createGlobalVar(name, type, false, ConstInt.ZERO);
                 addSymbol(name, globalVar);
             } else {
                 AllocaInst allocaInst = factory.createLocalVar(curBlk, null, type);
@@ -301,6 +310,43 @@ public class Vistor {
         return null;
     }
 
+    // FuncDef → FuncType Ident '(' [FuncFParams] ')' Block
+    private void visitFuncDef(VNode funcDefNode) {
+        VNode typeEndNode = funcDefNode.getChildNode(0).get1stChildNode();
+        TokenType endNodeTokenType = getEndNodeTokenType(typeEndNode);
+        Type type = null;
+        if (endNodeTokenType == TokenType.INTTK) {
+            type = IntType.i32;
+        } else if (endNodeTokenType == TokenType.VOIDTK) {
+            type = VoidType.voidType;
+        }
+        String name = getEndNodeValue(funcDefNode.getChildNode(1));
+        List<Type> paramTypes = new ArrayList<>();
+        List<Pair<Type, String>> funcFParams = null;
+        if (funcDefNode.getChildrenNodes().size() == 6) {
+            // FuncDef → FuncType Ident '(' FuncFParams ')' Block
+            VNode funcFParamsNode = funcDefNode.getChildNode(3);
+            // 获取形参类型+名称列表
+            funcFParams = visitFuncFParams(funcFParamsNode);
+            // 生成形参类型列表
+            for (Pair<Type, String> pair : funcFParams) {
+                paramTypes.add(pair.getFirst());
+            }
+        }
+        Value.valNumber = -1;
+        Function func = factory.createFunction(name, type, paramTypes);
+        curFunc = func;
+        addSymbol(name, func);
+        switchBlk();
+        pushTbl();
+        for (int i = 0; i < paramTypes.size(); i++) {
+            Argument arg = func.getArgs().get(i);
+            addSymbol(funcFParams.get(i).getSecond(), factory.createLocalVar(curBlk, arg, paramTypes.get(i)));
+        }
+        visitBlock(funcDefNode.getLastChildNode());
+        popTbl();
+    }
+
     // MainFuncDef → 'int' 'main' '(' ')' Block
     private void visitMainFuncDef(VNode mainFuncDefNode) {
         Function mainFunc = factory.createFunction("main", IntType.i32, new ArrayList<>());
@@ -312,12 +358,38 @@ public class Vistor {
         visitBlock(mainFuncDefNode.getLastChildNode());
     }
 
+    // FuncFParams → FuncFParam { ',' FuncFParam }
+    private List<Pair<Type, String>> visitFuncFParams(VNode funcFParamsNode) {
+        List<Pair<Type, String>> funcFParams = new ArrayList<>();
+        for (VNode node : funcFParamsNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.FuncFParam) {
+                funcFParams.add(visitFuncFParam(node));
+            }
+        }
+        return funcFParams;
+    }
+
+    // FuncFParam → BType Ident ['[' ']' { '[' ConstExp ']' }]
+    private Pair<Type, String> visitFuncFParam(VNode funcFParamNode) {
+        VNode typeEndNode = funcFParamNode.getChildNode(0).get1stChildNode();
+        TokenType endNodeTokenType = getEndNodeTokenType(typeEndNode);
+        Type type = null;
+        if (endNodeTokenType == TokenType.INTTK) {
+            type = IntType.i32;
+        } else if (endNodeTokenType == TokenType.VOIDTK) {
+            type = VoidType.voidType;
+        }
+        String name = getEndNodeValue(funcFParamNode.getChildNode(1));
+        // TODO: 这里没有考虑数组
+        return new Pair<>(type, name);
+    }
+
     // Block → '{' { BlockItem } '}'
     private void visitBlock(VNode blockNode) {
         pushTbl();
         for (VNode node : blockNode.getChildrenNodes()) {
-            switch (node.getNodeType()) {
-                case BlockItem -> visitBlockItem(node);
+            if (node.getNodeType() == NodeType.BlockItem) {
+                visitBlockItem(node);
             }
         }
         popTbl();
@@ -349,6 +421,12 @@ public class Vistor {
                     Value lVal = visitLVal(firstChildNode);
                     Value expValue = visitExp(stmtNode.getChildNode(2));
                     factory.createStoreInst(curBlk, lVal, expValue);
+                } else {
+                    // LVal '=' 'getint''('')'';'
+                    Value lVal = visitLVal(firstChildNode);
+                    Function getint = (Function) findSym("getint");
+                    CallInst callInst = factory.createCallInst(curBlk, getint, new ArrayList<>());
+                    factory.createStoreInst(curBlk, lVal, callInst);
                 }
             }
             case Exp -> visitExp(firstChildNode);
@@ -369,6 +447,65 @@ public class Vistor {
                             retInst = factory.createRetInst(curBlk);
                         }
                     }
+                    case PRINTFTK -> {
+                        // 'printf''('FormatString{','Exp}')'';'
+                        // formatString: "abc%d\n"
+                        String formatString = getEndNodeValue(stmtNode.getChildNode(2));
+                        // 去掉首尾的双引号
+                        formatString = formatString.substring(1, formatString.length() - 1);
+                        List<Value> exps = new ArrayList<>();
+                        for (VNode node : stmtNode.getChildrenNodes()) {
+                            if (node.getNodeType() == NodeType.Exp) {
+                                Value value = visitExp(node);
+                                exps.add(value);
+                            }
+                        }
+                        int j = 0;
+                        Value value = null;
+                        List<Value> args = new ArrayList<>();
+                        for (int i = 0; i < formatString.length(); ++i) {
+                            args.clear();
+                            char c = formatString.charAt(i);
+                            switch (c) {
+                                case '\\' -> {
+                                    ++i;
+                                    c = formatString.charAt(i);
+                                    switch (c) {
+                                        case 'n' -> {
+                                            value = new ConstInt(IntType.i32, 10);
+                                            args.add(value);
+                                        }
+                                        case '\\' -> {
+                                            value = new ConstInt(IntType.i32, 92);
+                                            args.add(value);
+                                        }
+                                    }
+                                    factory.createCallInst(curBlk, (Function) findSym("putch"), args);
+                                }
+                                case '%' -> {
+                                    ++i;
+                                    c = formatString.charAt(i);
+                                    switch (c) {
+                                        case 'd' -> {
+                                            value = exps.get(j++);
+                                            args.add(value);
+                                            factory.createCallInst(curBlk, (Function) findSym("putint"), args);
+                                        }
+                                        case 'c' -> {
+                                            value = exps.get(j++);
+                                            args.add(value);
+                                            factory.createCallInst(curBlk, (Function) findSym("putch"), args);
+                                        }
+                                    }
+                                }
+                                default -> {
+                                    value = new ConstInt(IntType.i32, c);
+                                    args.add(value);
+                                    factory.createCallInst(curBlk, (Function) findSym("putch"), args);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -380,13 +517,13 @@ public class Vistor {
         return value;
     }
 
-    // AddExp → MulExp | MulExp ('+' | '−') AddExp
+    // AddExp → MulExp | AddExp ('+' | '−') MulExp
     private Value visitAddExp(VNode addExpNode) {
-        Value mulExpValue = visitMulExp(addExpNode.get1stChildNode());
         if (addExpNode.getChildrenNodes().size() == 1) {
-            return mulExpValue;
+            return visitMulExp(addExpNode.get1stChildNode());
         }
-        Value addExpValue = visitAddExp(addExpNode.getChildNode(2));
+        Value addExpValue = visitAddExp(addExpNode.get1stChildNode());
+        Value mulExpValue = visitMulExp(addExpNode.getChildNode(2));
         VNode opNode = addExpNode.getChildNode(1);
         TokenType tokenType = getEndNodeTokenType(opNode);
         Operator op = null;
@@ -394,16 +531,16 @@ public class Vistor {
             case PLUS -> op = Operator.Add;
             case MINU -> op = Operator.Sub;
         }
-        return isConstExp ? calc(op, ((ConstInt) mulExpValue).getValue(), ((ConstInt) addExpValue).getValue()) : factory.createBinaryInst(curBlk, op, mulExpValue, addExpValue);
+        return isConstExp ? calc(op, ((ConstInt) addExpValue).getValue(), ((ConstInt) mulExpValue).getValue()) : factory.createBinaryInst(curBlk, op, addExpValue, mulExpValue);
     }
 
-    // MulExp → UnaryExp | UnaryExp ('*' | '/' | '%') MulExp
+    // MulExp → UnaryExp | MulExp ('*' | '/' | '%') UnaryExp
     private Value visitMulExp(VNode mulExpNode) {
-        Value unaryExpValue = visitUnaryExp(mulExpNode.get1stChildNode());
         if (mulExpNode.getChildrenNodes().size() == 1) {
-            return unaryExpValue;
+            return visitUnaryExp(mulExpNode.get1stChildNode());
         }
-        Value mulExpValue = visitMulExp(mulExpNode.getChildNode(2));
+        Value mulExpValue = visitMulExp(mulExpNode.get1stChildNode());
+        Value unaryExpValue = visitUnaryExp(mulExpNode.getChildNode(2));
         VNode opNode = mulExpNode.getChildNode(1);
         TokenType tokenType = getEndNodeTokenType(opNode);
         Operator op = null;
@@ -412,7 +549,7 @@ public class Vistor {
             case DIV -> op = Operator.Div;
             case MOD -> op = Operator.Mod;
         }
-        return isConstExp ? calc(op, ((ConstInt) unaryExpValue).getValue(), ((ConstInt) mulExpValue).getValue()) : factory.createBinaryInst(curBlk, op, unaryExpValue, mulExpValue);
+        return isConstExp ? calc(op, ((ConstInt) mulExpValue).getValue(), ((ConstInt) unaryExpValue).getValue()) : factory.createBinaryInst(curBlk, op, mulExpValue, unaryExpValue);
     }
 
     // UnaryExp → PrimaryExp | Ident '(' [FuncRParams] ')' | UnaryOp UnaryExp
@@ -445,8 +582,24 @@ public class Vistor {
         // UnaryExp → Ident '(' [FuncRParams] ')'
         String funcName = getEndNodeValue(unaryExpNode.get1stChildNode());
         Function func = (Function) findSym(funcName);
-        // TODO: 还没有涉及到函数调用
-        return null;
+        List<Value> funcRParams = new ArrayList<>();
+        if (unaryExpNode.getChildrenNodes().size() == 4) {
+            // UnaryExp → Ident '(' FuncRParams ')'
+            VNode funcRParamsNode = unaryExpNode.getChildNode(2);
+            funcRParams.addAll(visitFuncRParams(funcRParamsNode));
+        }
+        return factory.createCallInst(curBlk, func, funcRParams);
+    }
+
+    // FuncRParams → Exp { ',' Exp }
+    private List<Value> visitFuncRParams(VNode funcRParamsNode) {
+        List<Value> funcRParams = new ArrayList<>();
+        for (VNode node : funcRParamsNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.Exp) {
+                funcRParams.add(visitExp(node));
+            }
+        }
+        return funcRParams;
     }
 
     // PrimaryExp → '(' Exp ')' | LVal | Number

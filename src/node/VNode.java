@@ -3,6 +3,7 @@ package node;
 import token.Token;
 import utils.IOUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -17,7 +18,7 @@ public class VNode {
     );
 
     public VNode(List<VNode> childrenNodes, NodeType nodeType) {
-        this.childrenNodes = childrenNodes;
+        this.childrenNodes = new ArrayList<>(childrenNodes);
         this.nodeType = nodeType;
         this.value = '<' + nodeType.toString() + '>';
         this.line = getLastChildNode().getLine();
@@ -87,23 +88,13 @@ public class VNode {
     }
 
     public void printToBuffer() {
-        // 因改变了语法而导致语法树改变的, 需要特殊处理
-        if (justifiedNodeTypes.contains(this.nodeType)) {
-            childrenNodes.get(0).printToBuffer();
+        if (childrenNodes != null) {
+            for (VNode childNode : childrenNodes) {
+                childNode.printToBuffer();
+            }
+        }
+        if (!this.value.isEmpty()) {
             IOUtils.appendBuffer(this.value);
-            if (childrenNodes.size() > 1) {
-                childrenNodes.get(1).printToBuffer();
-                childrenNodes.get(2).printToBuffer();
-            }
-        } else {
-            if (childrenNodes != null) {
-                for (VNode childNode : childrenNodes) {
-                    childNode.printToBuffer();
-                }
-            }
-            if (!this.value.isEmpty()) {
-                IOUtils.appendBuffer(this.value);
-            }
         }
     }
 }

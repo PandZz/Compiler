@@ -24,6 +24,8 @@ public class Compiler {
             // 语法分析
             Parser parser = Parser.getInstance();
             VNode compUnitNode = parser.transTokens2VNode(tokens);
+//            compUnitNode.printToBuffer();
+//            IOUtils.writeBuffer2OutPut();
 
             // 错误处理
             if (Config.ERROR) {
@@ -32,8 +34,7 @@ public class Compiler {
 //                errorHandler.printErrors2Buffer();
             }
 
-            // 打印
-//            compUnitNode.printToBuffer();
+            // 中间代码生成
             Vistor vistor = Vistor.getInstance();
             vistor.visitCompUnit(compUnitNode);
             IRModule.getInstance().print2Buffer();

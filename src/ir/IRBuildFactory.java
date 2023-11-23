@@ -6,6 +6,7 @@ import ir.type.Type;
 import ir.type.VoidType;
 import ir.value.*;
 import ir.value.instructions.BinaryInst;
+import ir.value.instructions.CallInst;
 import ir.value.instructions.Operator;
 import ir.value.instructions.mem.AllocaInst;
 import ir.value.instructions.mem.LoadInst;
@@ -30,11 +31,15 @@ public class IRBuildFactory {
      */
 
     public Function createMainFunc() {
-        return new Function("main", new IntType(32), new ArrayList<>());
+        return new Function("main", new IntType(32), new ArrayList<>(), false);
     }
 
     public Function createFunction(String name, Type type, List<Type> parmTypes) {
-        return new Function(name, type, parmTypes);
+        return new Function(name, type, parmTypes, false);
+    }
+
+    public Function createLibraryFunction(String name, Type type, List<Type> parmTypes) {
+        return new Function(name, type, parmTypes, true);
     }
 
     public BasicBlock createBasicBlock(Function function) {
@@ -100,5 +105,11 @@ public class IRBuildFactory {
         LoadInst loadInst = new LoadInst(pointer);
         basicBlock.addOperand(loadInst);
         return loadInst;
+    }
+
+    public CallInst createCallInst(BasicBlock basicBlock, Function function, List<Value> args) {
+        CallInst callInst = new CallInst(function, args);
+        basicBlock.addOperand(callInst);
+        return callInst;
     }
 }

@@ -6,6 +6,6 @@ public enum Operator {
     Zext, Bitcast, // 类型转换
     Alloca, Load, Store, GEP, // 内存操作
     Phi, MemPhi, LoadDep, // Phi 指令
-    Br, Call, Ret, // 跳转指令
+    Br, Call, Ret, // 跳转指令, Call不是终结指令
     Not // 非运算符
 }

@@ -38,10 +38,6 @@ public class IRModule {
     }
 
     public void print2Buffer() {
-        IOUtils.appendBuffer("declare i32 @getint()          ; 读取一个整数\n" +
-                "declare void @putint(i32)      ; 输出一个整数\n" +
-                "declare void @putch(i32)       ; 输出一个字符\n" +
-                "declare void @putstr(i8*)      ; 输出字符串");
         for (GlobalVar globalVar : globalVars) {
             IOUtils.appendBuffer(globalVar.toString());
         }
