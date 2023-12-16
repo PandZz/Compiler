@@ -6,6 +6,7 @@ import ir.value.Value;
 public class Use {
     private Value value;
     private User user;
+    // pos表示该value是user的第几个操作数
     private int pos;
 
     public Use(Value value, User user, int pos) {

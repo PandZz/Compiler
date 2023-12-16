@@ -5,12 +5,11 @@ import ir.type.PointerType;
 import ir.type.Type;
 import ir.type.VoidType;
 import ir.value.*;
-import ir.value.instructions.BinaryInst;
-import ir.value.instructions.CallInst;
-import ir.value.instructions.Operator;
+import ir.value.instructions.*;
 import ir.value.instructions.mem.AllocaInst;
 import ir.value.instructions.mem.LoadInst;
 import ir.value.instructions.mem.StoreInst;
+import ir.value.instructions.terminator.BrInst;
 import ir.value.instructions.terminator.RetInst;
 
 import java.util.ArrayList;
@@ -111,5 +110,35 @@ public class IRBuildFactory {
         CallInst callInst = new CallInst(function, args);
         basicBlock.addOperand(callInst);
         return callInst;
+    }
+
+    public IcmpInst createIcmpInst(BasicBlock basicBlock, Operator op, Value lhs, Value rhs) {
+        if (lhs.getType() instanceof IntType && ((IntType) lhs.getType()).getBit() == 1) {
+            lhs = new ConvInst(Operator.Zext, lhs);
+            basicBlock.addOperand(lhs);
+        }
+        if (rhs.getType() instanceof IntType && ((IntType) rhs.getType()).getBit() == 1) {
+            rhs = new ConvInst(Operator.Zext, rhs);
+            basicBlock.addOperand(rhs);
+        }
+        IcmpInst icmpInst = new IcmpInst(op, lhs, rhs);
+        basicBlock.addOperand(icmpInst);
+        return icmpInst;
+    }
+
+    public BrInst createBrInst(BasicBlock basicBlock, Value cond, BasicBlock trueBlock, BasicBlock falseBlock) {
+        if (!(cond.getType() instanceof IntType && ((IntType) cond.getType()).getBit() == 1)) {
+            cond = new IcmpInst(Operator.Ne, cond, ConstInt.ZERO);
+            basicBlock.addOperand(cond);
+        }
+        BrInst brInst = new BrInst(cond, trueBlock, falseBlock);
+        basicBlock.addOperand(brInst);
+        return brInst;
+    }
+
+    public BrInst createBrInst(BasicBlock basicBlock, BasicBlock jmpBlock) {
+        BrInst brInst = new BrInst(jmpBlock);
+        basicBlock.addOperand(brInst);
+        return brInst;
     }
 }

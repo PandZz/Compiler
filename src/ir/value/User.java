@@ -22,6 +22,10 @@ public class User extends Value {
         return operands.get(index);
     }
 
+    public void setOperand(int index, Value value) {
+        operands.set(index, value);
+    }
+
     public void addOperand(Value operand) {
         this.operands.add(operand);
         Use use = new Use(operand, this, operands.size() - 1);

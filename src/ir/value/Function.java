@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Function extends User {
-    // TODO: 这里只考虑了main函数, 且其无参
     private final boolean isLibrary;
     private List<Argument> args;
     private List<BasicBlock> basicBlocks;
@@ -27,7 +26,15 @@ public class Function extends User {
     }
 
     public void addBasicBlock(BasicBlock basicBlock) {
+        BasicBlock prev = null;
+        if (!basicBlocks.isEmpty()) {
+            prev = basicBlocks.get(basicBlocks.size() - 1);
+        }
         basicBlocks.add(basicBlock);
+        if (prev != null) {
+            prev.setNext(basicBlock);
+            basicBlock.setPrev(prev);
+        }
         addOperand(basicBlock);
     }
 
@@ -67,5 +74,13 @@ public class Function extends User {
             sb.append("}\n");
         }
         return sb.toString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof Function) {
+            return ((Function) obj).getName().equals(getName());
+        }
+        return false;
     }
 }

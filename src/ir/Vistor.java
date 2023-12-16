@@ -5,18 +5,17 @@ import ir.type.Type;
 import ir.type.VoidType;
 import ir.value.*;
 import ir.value.instructions.CallInst;
+import ir.value.instructions.IcmpInst;
 import ir.value.instructions.Operator;
 import ir.value.instructions.mem.AllocaInst;
+import ir.value.instructions.terminator.BrInst;
 import ir.value.instructions.terminator.RetInst;
 import node.NodeType;
 import node.VNode;
 import token.TokenType;
 import utils.Pair;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Vistor {
     private static Vistor instance = null;
@@ -24,6 +23,15 @@ public class Vistor {
     private List<Map<String, Value>> symTlbs;
     private List<Map<String, Integer>> constTlbs;
     private BasicBlock curBlk;
+    private BasicBlock curTrueBlk = null;
+
+    /**
+     * 需要回填的基本块或者基本块之间的符号|| &&
+     * ||: 1, &&: 0, 不是符号就是-1
+     */
+    private final List<Pair<BasicBlock, Integer>> refillList = new ArrayList<>();
+    private BasicBlock curFalseBlk = null;
+    private BasicBlock curFinalBlk = null;
     private Function curFunc;
     private boolean isConstExp;
 
@@ -49,8 +57,9 @@ public class Vistor {
         return curFunc == null;
     }
 
-    private void switchBlk() {
+    private String switchBlk() {
         curBlk = factory.createBasicBlock(curFunc);
+        return curBlk.getName();
     }
 
     private Value calc(Operator op, int l, int r) {
@@ -72,10 +81,8 @@ public class Vistor {
     }
 
     private Value calc(Operator op, int val) {
-        switch (op) {
-            case Not -> {
-                return val == 0 ? ConstInt.ONE : ConstInt.ZERO;
-            }
+        if (Objects.requireNonNull(op) == Operator.Not) {
+            return val == 0 ? ConstInt.ONE : ConstInt.ZERO;
         }
         return null;
     }
@@ -353,9 +360,11 @@ public class Vistor {
         // TODO: 在每个函数进入时都要清空Value.valNumber, 并准备一个新的curBlk
         Value.valNumber = -1;
         curFunc = mainFunc;
-        switchBlk();
         addSymbol("main", mainFunc);
+        switchBlk();
+        pushTbl();
         visitBlock(mainFuncDefNode.getLastChildNode());
+        popTbl();
     }
 
     // FuncFParams → FuncFParam { ',' FuncFParam }
@@ -386,13 +395,11 @@ public class Vistor {
 
     // Block → '{' { BlockItem } '}'
     private void visitBlock(VNode blockNode) {
-        pushTbl();
         for (VNode node : blockNode.getChildrenNodes()) {
             if (node.getNodeType() == NodeType.BlockItem) {
                 visitBlockItem(node);
             }
         }
-        popTbl();
     }
 
     // BlockItem → Decl | Stmt
@@ -400,6 +407,163 @@ public class Vistor {
         switch (blockItemNode.get1stChildNode().getNodeType()) {
             case Decl -> visitDecl(blockItemNode.get1stChildNode());
             case Stmt -> visitStmt(blockItemNode.get1stChildNode());
+        }
+    }
+
+    private boolean isAndBlk(int i) {
+        return i > 0 && refillList.get(i - 1).getSecond() == 0 || i < refillList.size() - 1 && refillList.get(i + 1).getSecond() == 0;
+    }
+
+    private void refill() {
+        int len = refillList.size();
+        refillList.add(new Pair<>(null, 1));
+        refillList.add(new Pair<>(curFalseBlk, -1));
+        for (int i = 0, j = 0; i < len; ++i) {
+            Pair<BasicBlock, Integer> pair = refillList.get(i);
+            if (pair.getSecond() == -1) {
+                if (isAndBlk(i)) {
+                    if (j <= i) {
+                        j = i + 1;
+                        while (refillList.get(j).getSecond() != 1) {
+                            ++j;
+                        }
+                        ++j;
+                    }
+                    BasicBlock tblk = refillList.get(i + 2).getFirst();
+                    BasicBlock fblk = refillList.get(j).getFirst();
+                    if (refillList.get(i + 1).getSecond() == 1) {
+                        tblk = curTrueBlk;
+                    }
+                    BasicBlock rblk = refillList.get(i).getFirst();
+                    BrInst brInst = rblk.getLastInst() instanceof BrInst ? (BrInst) rblk.getLastInst() : null;
+                    if (brInst != null) {
+                        brInst.setTrueBlock(tblk);
+                        brInst.setFalseBlock(fblk);
+                    }
+//                    factory.createBrInst(rblk, rblk.getLastInst(), tblk, fblk);
+                } else {
+                    BasicBlock rblk = refillList.get(i).getFirst();
+                    BasicBlock tblk = curTrueBlk;
+                    BasicBlock fblk = refillList.get(i + 2).getFirst();
+                    BrInst brInst = rblk.getLastInst() instanceof BrInst ? (BrInst) rblk.getLastInst() : null;
+                    if (brInst != null) {
+                        brInst.setTrueBlock(tblk);
+                        brInst.setFalseBlock(fblk);
+                    }
+//                    factory.createBrInst(rblk, rblk.getLastInst(), tblk, fblk);
+                }
+            }
+        }
+        factory.createBrInst(curTrueBlk, curFinalBlk);
+    }
+
+    // 'if' '(' Cond ')' Stmt [ 'else' Stmt ]
+    private void visitIfStmt(VNode stmtNode) {
+        VNode condNode = stmtNode.getChildNode(2);
+        VNode stmtTrueNode = stmtNode.getChildNode(4);
+        if (stmtNode.getChildrenNodes().size() > 5) {
+            // 'if' '(' Cond ')' Stmt 'else' Stmt
+            VNode stmtFalseNode = stmtNode.getChildNode(6);
+
+            visitCond(condNode);
+
+            switchBlk();
+            visitStmt(stmtTrueNode);
+            curTrueBlk = curBlk;
+
+            switchBlk();
+            visitStmt(stmtFalseNode);
+            curFalseBlk = curBlk;
+
+            switchBlk();
+            curFinalBlk = curBlk;
+        } else {
+            // 'if' '(' Cond ')' Stmt
+            /*
+            * basicBlk
+            * if (...)
+            *   trueBlk
+            * falseBlk(finalBlk)
+            * -----------------
+            * ...
+            * br i1 <result>, label <trueBlk>, label <falseBlk>
+            * */
+            visitCond(condNode);
+
+            switchBlk();
+            visitStmt(stmtTrueNode);
+            curTrueBlk = curBlk;
+
+            switchBlk();
+            curFinalBlk = curBlk;
+
+            curFalseBlk = curFinalBlk;
+        }
+        refill();
+    }
+
+    // 'for' '(' [ForStmt] ';' [Cond] ';' [forStmt] ')' Stmt
+    private void visitForStmt(VNode stmtNode) {
+    }
+
+    // 'printf''('FormatString{','Exp}')'';'
+    private void visitPrintfStmt(VNode stmtNode) {
+        // 'printf''('FormatString{','Exp}')'';'
+        // formatString: "abc%d\n"
+        String formatString = getEndNodeValue(stmtNode.getChildNode(2));
+        // 去掉首尾的双引号
+        formatString = formatString.substring(1, formatString.length() - 1);
+        List<Value> exps = new ArrayList<>();
+        for (VNode node : stmtNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.Exp) {
+                Value value = visitExp(node);
+                exps.add(value);
+            }
+        }
+        int j = 0;
+        Value value = null;
+        List<Value> args = new ArrayList<>();
+        for (int i = 0; i < formatString.length(); ++i) {
+            args.clear();
+            char c = formatString.charAt(i);
+            switch (c) {
+                case '\\' -> {
+                    ++i;
+                    c = formatString.charAt(i);
+                    switch (c) {
+                        case 'n' -> {
+                            value = new ConstInt(IntType.i32, 10);
+                            args.add(value);
+                        }
+                        case '\\' -> {
+                            value = new ConstInt(IntType.i32, 92);
+                            args.add(value);
+                        }
+                    }
+                    factory.createCallInst(curBlk, (Function) findSym("putch"), args);
+                }
+                case '%' -> {
+                    ++i;
+                    c = formatString.charAt(i);
+                    switch (c) {
+                        case 'd' -> {
+                            value = exps.get(j++);
+                            args.add(value);
+                            factory.createCallInst(curBlk, (Function) findSym("putint"), args);
+                        }
+                        case 'c' -> {
+                            value = exps.get(j++);
+                            args.add(value);
+                            factory.createCallInst(curBlk, (Function) findSym("putch"), args);
+                        }
+                    }
+                }
+                default -> {
+                    value = new ConstInt(IntType.i32, c);
+                    args.add(value);
+                    factory.createCallInst(curBlk, (Function) findSym("putch"), args);
+                }
+            }
         }
     }
 
@@ -430,82 +594,26 @@ public class Vistor {
                 }
             }
             case Exp -> visitExp(firstChildNode);
-            case Block -> visitBlock(firstChildNode);
+            case Block -> {
+                pushTbl();
+                visitBlock(firstChildNode);
+                popTbl();
+            }
             case EndNode -> {
                 TokenType tokenType = getEndNodeTokenType(firstChildNode);
                 switch (tokenType) {
-//                    case IFTK -> visitIfStmt(stmtNode);
-//                    case FORTK -> visitForStmt(stmtNode);
+                    case IFTK -> visitIfStmt(stmtNode);
+                    case FORTK -> visitForStmt(stmtNode);
 //                    case BREAKTK -> visitBreakStmt(stmtNode);
 //                    case CONTINUETK -> visitContinueStmt(stmtNode);
                     case RETURNTK -> {
-//                        visitExp(stmtNode.getChildNode(1));
-                        RetInst retInst;
                         if (stmtNode.getChildrenNodes().size() == 3) {
-                            retInst = factory.createRetInst(curBlk, visitExp(stmtNode.getChildNode(1)));
+                            factory.createRetInst(curBlk, visitExp(stmtNode.getChildNode(1)));
                         } else {
-                            retInst = factory.createRetInst(curBlk);
+                            factory.createRetInst(curBlk);
                         }
                     }
-                    case PRINTFTK -> {
-                        // 'printf''('FormatString{','Exp}')'';'
-                        // formatString: "abc%d\n"
-                        String formatString = getEndNodeValue(stmtNode.getChildNode(2));
-                        // 去掉首尾的双引号
-                        formatString = formatString.substring(1, formatString.length() - 1);
-                        List<Value> exps = new ArrayList<>();
-                        for (VNode node : stmtNode.getChildrenNodes()) {
-                            if (node.getNodeType() == NodeType.Exp) {
-                                Value value = visitExp(node);
-                                exps.add(value);
-                            }
-                        }
-                        int j = 0;
-                        Value value = null;
-                        List<Value> args = new ArrayList<>();
-                        for (int i = 0; i < formatString.length(); ++i) {
-                            args.clear();
-                            char c = formatString.charAt(i);
-                            switch (c) {
-                                case '\\' -> {
-                                    ++i;
-                                    c = formatString.charAt(i);
-                                    switch (c) {
-                                        case 'n' -> {
-                                            value = new ConstInt(IntType.i32, 10);
-                                            args.add(value);
-                                        }
-                                        case '\\' -> {
-                                            value = new ConstInt(IntType.i32, 92);
-                                            args.add(value);
-                                        }
-                                    }
-                                    factory.createCallInst(curBlk, (Function) findSym("putch"), args);
-                                }
-                                case '%' -> {
-                                    ++i;
-                                    c = formatString.charAt(i);
-                                    switch (c) {
-                                        case 'd' -> {
-                                            value = exps.get(j++);
-                                            args.add(value);
-                                            factory.createCallInst(curBlk, (Function) findSym("putint"), args);
-                                        }
-                                        case 'c' -> {
-                                            value = exps.get(j++);
-                                            args.add(value);
-                                            factory.createCallInst(curBlk, (Function) findSym("putch"), args);
-                                        }
-                                    }
-                                }
-                                default -> {
-                                    value = new ConstInt(IntType.i32, c);
-                                    args.add(value);
-                                    factory.createCallInst(curBlk, (Function) findSym("putch"), args);
-                                }
-                            }
-                        }
-                    }
+                    case PRINTFTK -> visitPrintfStmt(stmtNode);
                 }
             }
         }
@@ -513,8 +621,15 @@ public class Vistor {
 
     // Exp → AddExp
     private Value visitExp(VNode expNode) {
-        Value value = visitAddExp(expNode.get1stChildNode());
-        return value;
+        return visitAddExp(expNode.get1stChildNode());
+    }
+
+    // Cond → LOrExp
+    private Value visitCond(VNode condNode) {
+//        switchBlk();
+        refillList.clear();
+        refillList.add(new Pair<>(curBlk, -1));
+        return visitLOrExp(condNode.get1stChildNode());
     }
 
     // AddExp → MulExp | AddExp ('+' | '−') MulExp
@@ -636,5 +751,85 @@ public class Vistor {
         // LVal → Ident {'[' Exp ']'}
         // TODO: 这里没有考虑数组
         return null;
+    }
+
+    // RelExp → AddExp | RelExp ('<' | '>' | '<=' | '>=') AddExp
+    private Value visitRelExp(VNode relExpNode) {
+        if (relExpNode.getChildrenNodes().size() == 1) {
+            return visitAddExp(relExpNode.get1stChildNode());
+        }
+        Value relExpValue = visitRelExp(relExpNode.get1stChildNode());
+        Value addExpValue = visitAddExp(relExpNode.getChildNode(2));
+        VNode opNode = relExpNode.getChildNode(1);
+        TokenType tokenType = getEndNodeTokenType(opNode);
+        Operator op = null;
+        switch (tokenType) {
+            case LSS -> op = Operator.Lt;
+            case LEQ -> op = Operator.Le;
+            case GRE -> op = Operator.Gt;
+            case GEQ -> op = Operator.Ge;
+        }
+        return factory.createIcmpInst(curBlk, op, relExpValue, addExpValue);
+    }
+
+    // EqExp → RelExp | EqExp ('==' | '!=') RelExp
+    private Value visitEqExp(VNode eqExpNode) {
+        if (eqExpNode.getChildrenNodes().size() == 1) {
+            return visitRelExp(eqExpNode.get1stChildNode());
+        }
+        Value eqExpValue = visitEqExp(eqExpNode.get1stChildNode());
+        Value relExpValue = visitRelExp(eqExpNode.getChildNode(2));
+        VNode opNode = eqExpNode.getChildNode(1);
+        TokenType tokenType = getEndNodeTokenType(opNode);
+        Operator op = null;
+        switch (tokenType) {
+            case EQL -> op = Operator.Eq;
+            case NEQ -> op = Operator.Ne;
+        }
+        return factory.createIcmpInst(curBlk, op, eqExpValue, relExpValue);
+    }
+
+    // LAndExp → EqExp | LAndExp '&&' EqExp
+    private Value visitLAndExp(VNode lAndExpNode) {
+        // LAndExp → EqExp
+        if (lAndExpNode.getChildrenNodes().size() == 1) {
+            Value res = visitEqExp(lAndExpNode.get1stChildNode());
+            if (!(res instanceof BrInst)) {
+                res = factory.createBrInst(curBlk, res, BasicBlock.PLACE_HOLDER, BasicBlock.PLACE_HOLDER);
+            }
+            return res;
+        }
+        // LAndExp → LAndExp '&&' EqExp
+        visitLAndExp(lAndExpNode.get1stChildNode());
+        refillList.add(new Pair<>(null, 0));
+        switchBlk();
+        refillList.add(new Pair<>(curBlk, -1));
+        Value res = visitEqExp(lAndExpNode.getChildNode(2));
+        if (!(res instanceof BrInst)) {
+            res = factory.createBrInst(curBlk, res, BasicBlock.PLACE_HOLDER, BasicBlock.PLACE_HOLDER);
+        }
+        return res;
+    }
+
+    // LOrExp → LAndExp | LOrExp '||' LAndExp
+    private Value visitLOrExp(VNode lOrExpNode) {
+        // LOrExp → LAndExp
+        if (lOrExpNode.getChildrenNodes().size() == 1) {
+            Value res = visitLAndExp(lOrExpNode.get1stChildNode());
+            if (!(res instanceof BrInst)) {
+                res = factory.createBrInst(curBlk, res, BasicBlock.PLACE_HOLDER, BasicBlock.PLACE_HOLDER);
+            }
+            return res;
+        }
+        // LOrExp → LOrExp '||' LAndExp
+        visitLOrExp(lOrExpNode.get1stChildNode());
+        refillList.add(new Pair<>(null, 1));
+        switchBlk();
+        refillList.add(new Pair<>(curBlk, -1));
+        Value res = visitLAndExp(lOrExpNode.getChildNode(2));
+        if (!(res instanceof BrInst)) {
+            res = factory.createBrInst(curBlk, res, BasicBlock.PLACE_HOLDER, BasicBlock.PLACE_HOLDER);
+        }
+        return res;
     }
 }
