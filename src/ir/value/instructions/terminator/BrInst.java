@@ -45,6 +45,10 @@ public class BrInst extends TerminatorInst {
         setOperand(2, falseBlock);
     }
 
+    public void setJmpBlock(Value jmpBlock) {
+        setOperand(0, jmpBlock);
+    }
+
     public boolean isJmp() {
         return isJmp;
     }

@@ -67,7 +67,7 @@ public class Function extends User {
         if (basicBlocks.isEmpty())
             sb.append(")");
         else {
-            sb.append(") {\n");
+            sb.append(") {");
             for (BasicBlock basicBlock : basicBlocks) {
                 sb.append(basicBlock.toString());
             }

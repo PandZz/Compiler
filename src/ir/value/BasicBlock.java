@@ -60,7 +60,7 @@ public class BasicBlock extends User {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder(getName() + ":\n");
+        StringBuilder sb = new StringBuilder("\n" + getName() + ":\n");
         Instruction inst;
         for (Value value : operands) {
             inst = (Instruction) value;

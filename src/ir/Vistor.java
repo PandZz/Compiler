@@ -5,11 +5,9 @@ import ir.type.Type;
 import ir.type.VoidType;
 import ir.value.*;
 import ir.value.instructions.CallInst;
-import ir.value.instructions.IcmpInst;
 import ir.value.instructions.Operator;
 import ir.value.instructions.mem.AllocaInst;
 import ir.value.instructions.terminator.BrInst;
-import ir.value.instructions.terminator.RetInst;
 import node.NodeType;
 import node.VNode;
 import token.TokenType;
@@ -23,17 +21,20 @@ public class Vistor {
     private List<Map<String, Value>> symTlbs;
     private List<Map<String, Integer>> constTlbs;
     private BasicBlock curBlk;
-    private BasicBlock curTrueBlk = null;
 
     /**
      * 需要回填的基本块或者基本块之间的符号|| &&
      * ||: 1, &&: 0, 不是符号就是-1
      */
-    private final List<Pair<BasicBlock, Integer>> refillList = new ArrayList<>();
-    private BasicBlock curFalseBlk = null;
-    private BasicBlock curFinalBlk = null;
+//    private final List<Pair<BasicBlock, Integer>> ifRefillList = new ArrayList<>();
+    /**
+     * for中的break和continue序号回填的br
+     * 数字编号表是0: break还是1: continue
+     */
+//    private final List<Pair<BrInst, Integer>> forRefillList = new ArrayList<>();
     private Function curFunc;
     private boolean isConstExp;
+    private int inFor = 0;
 
     /**
      * 当前的临时变量编号, 注意这个编号在每个函数中都是从0开始的, 且编号还会分配给基本块
@@ -350,7 +351,7 @@ public class Vistor {
             Argument arg = func.getArgs().get(i);
             addSymbol(funcFParams.get(i).getSecond(), factory.createLocalVar(curBlk, arg, paramTypes.get(i)));
         }
-        visitBlock(funcDefNode.getLastChildNode());
+        visitBlock(funcDefNode.getLastChildNode(), null);
         popTbl();
     }
 
@@ -363,7 +364,7 @@ public class Vistor {
         addSymbol("main", mainFunc);
         switchBlk();
         pushTbl();
-        visitBlock(mainFuncDefNode.getLastChildNode());
+        visitBlock(mainFuncDefNode.getLastChildNode(), null);
         popTbl();
     }
 
@@ -394,47 +395,47 @@ public class Vistor {
     }
 
     // Block → '{' { BlockItem } '}'
-    private void visitBlock(VNode blockNode) {
+    private void visitBlock(VNode blockNode, List<Pair<BrInst, Integer>> forRefillList) {
         for (VNode node : blockNode.getChildrenNodes()) {
             if (node.getNodeType() == NodeType.BlockItem) {
-                visitBlockItem(node);
+                visitBlockItem(node, forRefillList);
             }
         }
     }
 
     // BlockItem → Decl | Stmt
-    private void visitBlockItem(VNode blockItemNode) {
+    private void visitBlockItem(VNode blockItemNode, List<Pair<BrInst, Integer>> forRefillList) {
         switch (blockItemNode.get1stChildNode().getNodeType()) {
             case Decl -> visitDecl(blockItemNode.get1stChildNode());
-            case Stmt -> visitStmt(blockItemNode.get1stChildNode());
+            case Stmt -> visitStmt(blockItemNode.get1stChildNode(), forRefillList);
         }
     }
 
-    private boolean isAndBlk(int i) {
-        return i > 0 && refillList.get(i - 1).getSecond() == 0 || i < refillList.size() - 1 && refillList.get(i + 1).getSecond() == 0;
+    private boolean isAndBlk(int i, List<Pair<BasicBlock, Integer>> ifRefillList) {
+        return i > 0 && ifRefillList.get(i - 1).getSecond() == 0 || i < ifRefillList.size() - 1 && ifRefillList.get(i + 1).getSecond() == 0;
     }
 
-    private void refill() {
-        int len = refillList.size();
-        refillList.add(new Pair<>(null, 1));
-        refillList.add(new Pair<>(curFalseBlk, -1));
+    private void refillIf(BasicBlock curIfTrueBlk, BasicBlock curIfFalseBlk, BasicBlock curIfFinalBlk, List<Pair<BasicBlock, Integer>> ifRefillList) {
+        int len = ifRefillList.size();
+        ifRefillList.add(new Pair<>(null, 1));
+        ifRefillList.add(new Pair<>(curIfFalseBlk, -1));
         for (int i = 0, j = 0; i < len; ++i) {
-            Pair<BasicBlock, Integer> pair = refillList.get(i);
+            Pair<BasicBlock, Integer> pair = ifRefillList.get(i);
             if (pair.getSecond() == -1) {
-                if (isAndBlk(i)) {
+                if (isAndBlk(i, ifRefillList)) {
                     if (j <= i) {
                         j = i + 1;
-                        while (refillList.get(j).getSecond() != 1) {
+                        while (ifRefillList.get(j).getSecond() != 1) {
                             ++j;
                         }
                         ++j;
                     }
-                    BasicBlock tblk = refillList.get(i + 2).getFirst();
-                    BasicBlock fblk = refillList.get(j).getFirst();
-                    if (refillList.get(i + 1).getSecond() == 1) {
-                        tblk = curTrueBlk;
+                    BasicBlock tblk = ifRefillList.get(i + 2).getFirst();
+                    BasicBlock fblk = ifRefillList.get(j).getFirst();
+                    if (ifRefillList.get(i + 1).getSecond() == 1) {
+                        tblk = curIfTrueBlk;
                     }
-                    BasicBlock rblk = refillList.get(i).getFirst();
+                    BasicBlock rblk = ifRefillList.get(i).getFirst();
                     BrInst brInst = rblk.getLastInst() instanceof BrInst ? (BrInst) rblk.getLastInst() : null;
                     if (brInst != null) {
                         brInst.setTrueBlock(tblk);
@@ -442,9 +443,9 @@ public class Vistor {
                     }
 //                    factory.createBrInst(rblk, rblk.getLastInst(), tblk, fblk);
                 } else {
-                    BasicBlock rblk = refillList.get(i).getFirst();
-                    BasicBlock tblk = curTrueBlk;
-                    BasicBlock fblk = refillList.get(i + 2).getFirst();
+                    BasicBlock rblk = ifRefillList.get(i).getFirst();
+                    BasicBlock tblk = curIfTrueBlk;
+                    BasicBlock fblk = ifRefillList.get(i + 2).getFirst();
                     BrInst brInst = rblk.getLastInst() instanceof BrInst ? (BrInst) rblk.getLastInst() : null;
                     if (brInst != null) {
                         brInst.setTrueBlock(tblk);
@@ -454,29 +455,39 @@ public class Vistor {
                 }
             }
         }
-        factory.createBrInst(curTrueBlk, curFinalBlk);
+//        factory.createBrInst(curIfTrueBlk, curIfFinalBlk);
     }
 
     // 'if' '(' Cond ')' Stmt [ 'else' Stmt ]
-    private void visitIfStmt(VNode stmtNode) {
+    private void visitIfStmt(VNode stmtNode, List<Pair<BrInst, Integer>> forRefillList) {
         VNode condNode = stmtNode.getChildNode(2);
         VNode stmtTrueNode = stmtNode.getChildNode(4);
+        List<Pair<BasicBlock, Integer>> ifRefillList = new ArrayList<>();
+        BasicBlock curIfTrueBlk = null, curIfFalseBlk = null, curIfFinalBlk = null, lastTrueBlk = null, lastFalseBlk = null;
         if (stmtNode.getChildrenNodes().size() > 5) {
             // 'if' '(' Cond ')' Stmt 'else' Stmt
             VNode stmtFalseNode = stmtNode.getChildNode(6);
 
-            visitCond(condNode);
+            visitCond(condNode, ifRefillList);
 
             switchBlk();
-            visitStmt(stmtTrueNode);
-            curTrueBlk = curBlk;
+            curIfTrueBlk = curBlk;
+            visitStmt(stmtTrueNode, forRefillList);
+            lastTrueBlk = curBlk;
 
             switchBlk();
-            visitStmt(stmtFalseNode);
-            curFalseBlk = curBlk;
+            curIfFalseBlk = curBlk;
+            visitStmt(stmtFalseNode, forRefillList);
+            lastFalseBlk = curBlk;
 
             switchBlk();
-            curFinalBlk = curBlk;
+            curIfFinalBlk = curBlk;
+
+            // refill trueBlk
+            factory.createBrInst(lastTrueBlk, curIfFinalBlk);
+
+            // refill falseBlk
+            factory.createBrInst(lastFalseBlk, curIfFinalBlk);
         } else {
             // 'if' '(' Cond ')' Stmt
             /*
@@ -488,22 +499,131 @@ public class Vistor {
             * ...
             * br i1 <result>, label <trueBlk>, label <falseBlk>
             * */
-            visitCond(condNode);
+            visitCond(condNode, ifRefillList);
 
             switchBlk();
-            visitStmt(stmtTrueNode);
-            curTrueBlk = curBlk;
+            curIfTrueBlk = curBlk;
+            visitStmt(stmtTrueNode, forRefillList);
+            lastTrueBlk = curBlk;
 
             switchBlk();
-            curFinalBlk = curBlk;
+            curIfFinalBlk = curBlk;
 
-            curFalseBlk = curFinalBlk;
+            curIfFalseBlk = curIfFinalBlk;
+
+            // refill trueBlk
+            factory.createBrInst(lastTrueBlk, curIfFinalBlk);
         }
-        refill();
+        refillIf(curIfTrueBlk, curIfFalseBlk, curIfFinalBlk, ifRefillList);
+    }
+
+    private void refillFor(BasicBlock forStmt2Blk, BasicBlock finalBlk, List<Pair<BrInst, Integer>> forRefillList) {
+        for (Pair<BrInst, Integer> pair : forRefillList) {
+            if (pair.getSecond() == 0) {
+                // break
+                pair.getFirst().setJmpBlock(finalBlk);
+            } else {
+                // continue
+                pair.getFirst().setJmpBlock(forStmt2Blk);
+            }
+        }
     }
 
     // 'for' '(' [ForStmt] ';' [Cond] ';' [forStmt] ')' Stmt
-    private void visitForStmt(VNode stmtNode) {
+    private void visitFor(VNode stmtNode) {
+        inFor++;
+//        VNode forStmt1Node, condNode, forStmt2Node, forBlockNode;
+        VNode[] nodes = new VNode[4];
+        int idx = 0;
+        for (VNode node : stmtNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.EndNode) {
+                TokenType type = getEndNodeTokenType(node);
+                if (type == TokenType.SEMICN || type == TokenType.RPARENT) {
+                    idx++;
+                }
+            } else {
+                nodes[idx] = node;
+            }
+        }
+        BasicBlock foreHeadBlk, condBlk = null, forStmt1Blk = null, forStmt2Blk = null, forBlk = null, lastForBlk = null;
+
+        foreHeadBlk = curBlk;
+
+        // forStmt1, 无需特殊处理
+        if (nodes[0] != null) {
+            forStmt1Blk = curBlk;
+            visitForStmt(nodes[0]);
+        }
+
+        List<Pair<BasicBlock, Integer>> ifRefillList = new ArrayList<>();
+        // cond
+        if (nodes[1] != null) {
+            switchBlk();
+            condBlk = curBlk;
+            visitCond(nodes[1], ifRefillList);
+        }
+        // TODOn: 若没有cond, 则默认为true, 可直接跳转到forBlock, 即condBlk = forBlk
+
+        // forBlock
+        // 没有cond(此时curBlk包含有指令, 并不是visitCond新创建的基本块), 才需要switchBlk
+        switchBlk();
+        forBlk = curBlk;
+        List<Pair<BrInst, Integer>> forRefillList = new ArrayList<>();
+        visitStmt(nodes[3], forRefillList);
+        lastForBlk = curBlk;
+
+        // forStmt2
+        if (nodes[2] != null) {
+            // 当前基本块不是新块才需要切换基本块
+            switchBlk();
+            forStmt2Blk = curBlk;
+            visitForStmt(nodes[2]);
+        }
+
+        // refill forStmt1
+        if (forStmt1Blk != null) {
+            if (condBlk != null)
+                factory.createBrInst(forStmt1Blk, condBlk);
+            else factory.createBrInst(forStmt1Blk, forBlk);
+        } else {
+            // forStmt1不存在就从之前的blk跳入for
+            if (condBlk != null)
+                factory.createBrInst(foreHeadBlk, condBlk);
+            else factory.createBrInst(foreHeadBlk, forBlk);
+        }
+
+        // get finalBlk
+        switchBlk();
+        BasicBlock curFinalBlk = curBlk;
+
+        // refill cond
+        if (condBlk != null) {
+//            factory.createBrInst(condBlk, forBlk);
+            refillIf(forBlk, curFinalBlk, curFinalBlk, ifRefillList);
+        }
+
+        // refill forBlk
+        if (forStmt2Blk != null) {
+            factory.createBrInst(lastForBlk, forStmt2Blk);
+        } else if (condBlk != null) {
+            factory.createBrInst(lastForBlk, condBlk);
+        } else {
+            factory.createBrInst(lastForBlk, forBlk);
+        }
+
+        // refill forStmt2
+        if (forStmt2Blk != null){
+            if (condBlk != null ){
+                factory.createBrInst(forStmt2Blk, condBlk);
+            } else {
+                factory.createBrInst(forStmt2Blk, forBlk);
+            }
+        }
+
+        // refill break and continue
+        refillFor(forStmt2Blk, curFinalBlk, forRefillList);
+
+        inFor--;
     }
 
     // 'printf''('FormatString{','Exp}')'';'
@@ -576,7 +696,7 @@ public class Vistor {
     //| 'return' [Exp] ';'
     //| LVal '=' 'getint''('')'';'
     //| 'printf''('FormatString{','Exp}')'';'
-    private void visitStmt(VNode stmtNode) {
+    private void visitStmt(VNode stmtNode, List<Pair<BrInst, Integer>> forRefillList) {
         VNode firstChildNode = stmtNode.get1stChildNode();
         switch (firstChildNode.getNodeType()) {
             case LVal -> {
@@ -596,16 +716,28 @@ public class Vistor {
             case Exp -> visitExp(firstChildNode);
             case Block -> {
                 pushTbl();
-                visitBlock(firstChildNode);
+                visitBlock(firstChildNode, forRefillList);
                 popTbl();
             }
             case EndNode -> {
                 TokenType tokenType = getEndNodeTokenType(firstChildNode);
                 switch (tokenType) {
-                    case IFTK -> visitIfStmt(stmtNode);
-                    case FORTK -> visitForStmt(stmtNode);
-//                    case BREAKTK -> visitBreakStmt(stmtNode);
-//                    case CONTINUETK -> visitContinueStmt(stmtNode);
+                    case IFTK -> visitIfStmt(stmtNode, forRefillList);
+                    case FORTK -> visitFor(stmtNode);
+                    case BREAKTK -> {
+                        if (inFor > 0) {
+                            BrInst brInst = factory.createBrInst(curBlk, BasicBlock.PLACE_HOLDER);
+                            forRefillList.add(new Pair<>(brInst, 0));
+                            switchBlk();
+                        }
+                    }
+                    case CONTINUETK -> {
+                        if (inFor > 0) {
+                            BrInst brInst = factory.createBrInst(curBlk, BasicBlock.PLACE_HOLDER);
+                            forRefillList.add(new Pair<>(brInst, 1));
+                            switchBlk();
+                        }
+                    }
                     case RETURNTK -> {
                         if (stmtNode.getChildrenNodes().size() == 3) {
                             factory.createRetInst(curBlk, visitExp(stmtNode.getChildNode(1)));
@@ -619,17 +751,23 @@ public class Vistor {
         }
     }
 
+    // ForStmt → LVal '=' Exp
+    private Value visitForStmt(VNode forStmtNode) {
+        Value lVal = visitLVal(forStmtNode.get1stChildNode());
+        Value expValue = visitExp(forStmtNode.getChildNode(2));
+        return factory.createStoreInst(curBlk, lVal, expValue);
+    }
+
     // Exp → AddExp
     private Value visitExp(VNode expNode) {
         return visitAddExp(expNode.get1stChildNode());
     }
 
     // Cond → LOrExp
-    private Value visitCond(VNode condNode) {
+    private Value visitCond(VNode condNode, List<Pair<BasicBlock, Integer>> ifRefillList) {
 //        switchBlk();
-        refillList.clear();
-        refillList.add(new Pair<>(curBlk, -1));
-        return visitLOrExp(condNode.get1stChildNode());
+        ifRefillList.add(new Pair<>(curBlk, -1));
+        return visitLOrExp(condNode.get1stChildNode(), ifRefillList);
     }
 
     // AddExp → MulExp | AddExp ('+' | '−') MulExp
@@ -790,7 +928,7 @@ public class Vistor {
     }
 
     // LAndExp → EqExp | LAndExp '&&' EqExp
-    private Value visitLAndExp(VNode lAndExpNode) {
+    private Value visitLAndExp(VNode lAndExpNode, List<Pair<BasicBlock, Integer>> ifRefillList) {
         // LAndExp → EqExp
         if (lAndExpNode.getChildrenNodes().size() == 1) {
             Value res = visitEqExp(lAndExpNode.get1stChildNode());
@@ -800,10 +938,10 @@ public class Vistor {
             return res;
         }
         // LAndExp → LAndExp '&&' EqExp
-        visitLAndExp(lAndExpNode.get1stChildNode());
-        refillList.add(new Pair<>(null, 0));
+        visitLAndExp(lAndExpNode.get1stChildNode(), ifRefillList);
+        ifRefillList.add(new Pair<>(null, 0));
         switchBlk();
-        refillList.add(new Pair<>(curBlk, -1));
+        ifRefillList.add(new Pair<>(curBlk, -1));
         Value res = visitEqExp(lAndExpNode.getChildNode(2));
         if (!(res instanceof BrInst)) {
             res = factory.createBrInst(curBlk, res, BasicBlock.PLACE_HOLDER, BasicBlock.PLACE_HOLDER);
@@ -812,21 +950,21 @@ public class Vistor {
     }
 
     // LOrExp → LAndExp | LOrExp '||' LAndExp
-    private Value visitLOrExp(VNode lOrExpNode) {
+    private Value visitLOrExp(VNode lOrExpNode, List<Pair<BasicBlock, Integer>> ifRefillList) {
         // LOrExp → LAndExp
         if (lOrExpNode.getChildrenNodes().size() == 1) {
-            Value res = visitLAndExp(lOrExpNode.get1stChildNode());
+            Value res = visitLAndExp(lOrExpNode.get1stChildNode(), ifRefillList);
             if (!(res instanceof BrInst)) {
                 res = factory.createBrInst(curBlk, res, BasicBlock.PLACE_HOLDER, BasicBlock.PLACE_HOLDER);
             }
             return res;
         }
         // LOrExp → LOrExp '||' LAndExp
-        visitLOrExp(lOrExpNode.get1stChildNode());
-        refillList.add(new Pair<>(null, 1));
+        visitLOrExp(lOrExpNode.get1stChildNode(), ifRefillList);
+        ifRefillList.add(new Pair<>(null, 1));
         switchBlk();
-        refillList.add(new Pair<>(curBlk, -1));
-        Value res = visitLAndExp(lOrExpNode.getChildNode(2));
+        ifRefillList.add(new Pair<>(curBlk, -1));
+        Value res = visitLAndExp(lOrExpNode.getChildNode(2), ifRefillList);
         if (!(res instanceof BrInst)) {
             res = factory.createBrInst(curBlk, res, BasicBlock.PLACE_HOLDER, BasicBlock.PLACE_HOLDER);
         }
