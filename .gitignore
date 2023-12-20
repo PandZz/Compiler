@@ -39,3 +39,4 @@ testdata/
 *.tar
 *.gz
 *.rar
+**/src/extra/

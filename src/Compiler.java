@@ -34,6 +34,7 @@ public class Compiler {
                 errorHandler.CompUnitError(compUnitNode);
                 errorHandler.printErrors2Buffer();
                 hasError = IOUtils.getBufferLength() > 0;
+                IOUtils.appendBuffer("");
                 IOUtils.writeBuffer2Error();
                 IOUtils.clearBuffer();
             }

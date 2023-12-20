@@ -208,6 +208,8 @@ public class ErrorHandler {
         VNode identNode = funcDefNode.getChildNode(1);
         if (currentTable.getSymbolByName(getEndNodeValue(identNode), false) != null) {
             addError(new Error(ErrorType.b, identNode.getLine()));
+            // 出现了函数重定义就直接跳过函数不理会里面可能出现的错误
+            return;
         }
         SymbolTable nextTable = new SymbolTable(currentTable);
         currentTable.addChildTable(nextTable);
