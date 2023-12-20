@@ -1,13 +1,14 @@
 package ir;
 
-import ir.type.IntType;
-import ir.type.Type;
-import ir.type.VoidType;
+import ir.type.*;
 import ir.value.*;
 import ir.value.instructions.CallInst;
+import ir.value.instructions.Instruction;
 import ir.value.instructions.Operator;
 import ir.value.instructions.mem.AllocaInst;
+import ir.value.instructions.mem.GEPInst;
 import ir.value.instructions.terminator.BrInst;
+import ir.value.instructions.terminator.RetInst;
 import node.NodeType;
 import node.VNode;
 import token.TokenType;
@@ -19,15 +20,16 @@ public class Vistor {
     private static Vistor instance = null;
     private final IRBuildFactory factory;
     private List<Map<String, Value>> symTlbs;
-    private List<Map<String, Integer>> constTlbs;
+    private List<Map<String, Pair<Boolean, Integer>>> constTlbs;
+    private List<Map<String, Pair<Boolean, ConstArray>>> constArrayTlbs;
     private BasicBlock curBlk;
 
-    /**
+    /*
      * 需要回填的基本块或者基本块之间的符号|| &&
      * ||: 1, &&: 0, 不是符号就是-1
      */
 //    private final List<Pair<BasicBlock, Integer>> ifRefillList = new ArrayList<>();
-    /**
+    /*
      * for中的break和continue序号回填的br
      * 数字编号表是0: break还是1: continue
      */
@@ -43,6 +45,7 @@ public class Vistor {
         factory = IRBuildFactory.getInstance();
         symTlbs = new ArrayList<>();
         constTlbs = new ArrayList<>();
+        constArrayTlbs = new ArrayList<>();
         curBlk = null;
         curFunc = null;
         isConstExp = false;
@@ -66,19 +69,22 @@ public class Vistor {
     private Value calc(Operator op, int l, int r) {
         switch (op) {
             case Add -> {
-                return new ConstInt(IntType.i32, l + r);
+                return new ConstInt(l + r);
             }
             case Sub -> {
-                return new ConstInt(IntType.i32, l - r);
+                return new ConstInt(l - r);
             }
             case Mul -> {
-                return new ConstInt(IntType.i32, l * r);
+                return new ConstInt(l * r);
             }
             case Div -> {
-                return new ConstInt(IntType.i32, l / r);
+                return new ConstInt(l / r);
+            }
+            case Mod -> {
+                return new ConstInt(l % r);
             }
         }
-        return null;
+        return ConstInt.ZERO;
     }
 
     private Value calc(Operator op, int val) {
@@ -92,8 +98,12 @@ public class Vistor {
         return symTlbs.get(symTlbs.size() - 1);
     }
 
-    private Map<String, Integer> getCurConstTbl() {
+    private Map<String, Pair<Boolean, Integer>> getCurConstTbl() {
         return constTlbs.get(constTlbs.size() - 1);
+    }
+
+    private Map<String, Pair<Boolean, ConstArray>> getCurConstArrayTbl() {
+        return constArrayTlbs.get(constArrayTlbs.size() - 1);
     }
 
     /**
@@ -110,7 +120,7 @@ public class Vistor {
         return null;
     }
 
-    private Integer findConst(String name) {
+    private Pair<Boolean, Integer> findConst(String name) {
         for (int i = constTlbs.size() - 1; i >= 0; i--) {
             if (constTlbs.get(i).containsKey(name))
                 return constTlbs.get(i).get(name);
@@ -122,8 +132,20 @@ public class Vistor {
         getCurSymTbl().put(name, value);
     }
 
-    private void addConst(String name, Integer value) {
-        getCurConstTbl().put(name, value);
+    private void addConst(String name, Integer value, Boolean realConst) {
+        getCurConstTbl().put(name, new Pair<>(realConst, value));
+    }
+
+    private void addConstArray(String name, ConstArray value, Boolean realConst) {
+        getCurConstArrayTbl().put(name, new Pair<>(realConst, value));
+    }
+
+    private Pair<Boolean, ConstArray> findConstArray(String name) {
+        for (int i = constArrayTlbs.size() - 1; i >= 0; i--) {
+            if (constArrayTlbs.get(i).containsKey(name))
+                return constArrayTlbs.get(i).get(name);
+        }
+        return null;
     }
 
     private void pushSymTbl() {
@@ -134,9 +156,14 @@ public class Vistor {
         constTlbs.add(new HashMap<>());
     }
 
+    private void pushConstArrayTbl() {
+        constArrayTlbs.add(new HashMap<>());
+    }
+
     private void pushTbl() {
         pushSymTbl();
         pushConstTbl();
+        pushConstArrayTbl();
     }
 
     private void popSymTbl() {
@@ -147,9 +174,14 @@ public class Vistor {
         constTlbs.remove(constTlbs.size() - 1);
     }
 
+    private void popConstArrayTbl() {
+        constArrayTlbs.remove(constArrayTlbs.size() - 1);
+    }
+
     private void popTbl() {
         popSymTbl();
         popConstTbl();
+        popConstArrayTbl();
     }
 
     private final Map<String, TokenType> tokenTypeMap = new HashMap<>() {{
@@ -191,9 +223,7 @@ public class Vistor {
         for (VNode node : CompUnitNode.getChildrenNodes()) {
             switch (node.getNodeType()) {
                 case Decl -> {
-                    isConstExp = true;
                     visitDecl(node);
-                    isConstExp = false;
                 }
                 case FuncDef -> visitFuncDef(node);
                 case MainFuncDef -> visitMainFuncDef(node);
@@ -227,19 +257,48 @@ public class Vistor {
     }
 
     // ConstDef → Ident { '[' ConstExp ']' } '=' ConstInitVal
-    private void visitConstDef(VNode constDefNode, Type type) {
+    private void visitConstDef(VNode constDefNode, Type atomType) {
         String name = getEndNodeValue(constDefNode.get1stChildNode());
-        // TODO: 这里没有考虑数组
-        Value value = visitConstInitVal(constDefNode.getLastChildNode(), type);
+        // TODOn: 这里没有考虑数组
+        List<Integer> dims = new ArrayList<>();
+        for (VNode node : constDefNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.ConstExp)
+                dims.add(((ConstInt) visitConstExp(node)).getValue());
+        }
+        Type arrType = null;
+        for (int i = dims.size() - 1; i >= 0; i--) {
+            if (arrType == null) {
+                arrType = factory.getArrayType(atomType, dims.get(i));
+            } else {
+                arrType = factory.getArrayType(arrType, dims.get(i));
+            }
+        }
+        Value value = visitConstInitVal(constDefNode.getLastChildNode(), arrType == null ? atomType : arrType);
         if (isInGlobal()) {
-            GlobalVar globalVar = factory.createGlobalVar(name, type, true, value);
-            addSymbol(name, globalVar);
-            addConst(name, ((ConstInt) value).getValue());
+            if (arrType == null ){
+                // not array
+                GlobalVar globalVar = factory.createGlobalVar(name, atomType, true, value);
+                addSymbol(name, globalVar);
+                addConst(name, ((ConstInt) value).getValue(), true);
+            } else {
+                // array
+                // TODOn: 设置初始化值
+                GlobalVar globalVar = factory.createGlobalVar(name, arrType, true, value);
+                addSymbol(name, globalVar);
+                addConstArray(name, (ConstArray) value, true);
+            }
         } else {
-            AllocaInst allocaInst = factory.createLocalVar(curBlk, value, type);
-            addSymbol(name, allocaInst);
-            if (isConstExp) {
-                addConst(name, ((ConstInt) value).getValue());
+            if (arrType == null) {
+                // not array
+                AllocaInst allocaInst = factory.createLocalVar(curBlk, value, atomType);
+                addSymbol(name, allocaInst);
+                addConst(name, ((ConstInt) value).getValue(), true);
+            } else {
+                // array
+                // TODOn: 设置初始化值
+                AllocaInst localArray = factory.createLocalArray(curBlk, arrType, value);
+                addSymbol(name, localArray);
+                addConstArray(name, (ConstArray) value, true);
             }
         }
     }
@@ -251,8 +310,18 @@ public class Vistor {
             return visitConstExp(constInitValNode.get1stChildNode());
         }
         // ConstInitVal → '{' [ ConstInitVal { ',' ConstInitVal } ] '}'
-        // TODO: 这里没有考虑数组
-        return null;
+        // ConstInitVal → '{' '}' 这种情况不会出现
+        List<Value> constList = new ArrayList<>();
+        for (VNode node : constInitValNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.ConstInitVal) {
+                constList.add(visitConstInitVal(node, ((ArrayType) type).getElementType()));
+            }
+        }
+        if (!constList.isEmpty()) {
+            return factory.createConstArray(constList);
+        } else {
+            return new ConstArray(type);
+        }
     }
 
     // ConstExp → AddExp
@@ -280,29 +349,73 @@ public class Vistor {
     private void visitVarDef(VNode varDefNode, Type type) {
         String name = getEndNodeValue(varDefNode.get1stChildNode());
         // TODO: 这里没有考虑数组
+        List<Integer> dims = new ArrayList<>();
+        for (VNode node : varDefNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.ConstExp)
+                dims.add(((ConstInt) visitConstExp(node)).getValue());
+        }
+        Type arrType = null;
+        for (int i = dims.size() - 1; i >= 0; i--) {
+            if (arrType == null) {
+                arrType = factory.getArrayType(type, dims.get(i));
+            } else {
+                arrType = factory.getArrayType(arrType, dims.get(i));
+            }
+        }
         VNode lastChildNode = varDefNode.getLastChildNode();
+        if (arrType != null)
+            type = arrType;
         if (lastChildNode.getNodeType() == NodeType.InitVal) {
             // VarDef → Ident { '[' ConstExp ']' } '=' InitVal
             Value value = visitInitVal(lastChildNode, type);
             if (isInGlobal()) {
-                GlobalVar globalVar = factory.createGlobalVar(name, type, false, value);
-                addSymbol(name, globalVar);
-                addConst(name, ((ConstInt) value).getValue());
+                if (arrType == null) {
+                    // not array
+                    GlobalVar globalVar = factory.createGlobalVar(name, type, false, value);
+                    addSymbol(name, globalVar);
+                    addConst(name, ((ConstInt) value).getValue(), false);
+                } else {
+                    // array
+                    GlobalVar globalVar = factory.createGlobalVar(name, arrType, false, value);
+                    addSymbol(name, globalVar);
+                    addConstArray(name, (ConstArray) value, false);
+                }
             } else {
-                AllocaInst allocaInst = factory.createLocalVar(curBlk, value, type);
-                addSymbol(name, allocaInst);
-                if (isConstExp) {
-                    addConst(name, ((ConstInt) value).getValue());
+                if (arrType == null) {
+                    // not array
+                    AllocaInst allocaInst = factory.createLocalVar(curBlk, value, type);
+                    addSymbol(name, allocaInst);
+                    // 不在global中, 此时只做占位用
+                    addConst(name, -1, false);
+//                    if (isConstExp) {
+//                        addConst(name, ((ConstInt) value).getValue());
+//                    }
+                } else {
+                    // array
+                    AllocaInst localArray = factory.createLocalArray(curBlk, arrType, value);
+                    addSymbol(name, localArray);
+                    // 不在global中, 此时只做占位用
+                    addConstArray(name, (ConstArray) value, false);
                 }
             }
         } else {
             // VarDef → Ident { '[' ConstExp ']' }
             if (isInGlobal()) {
-                GlobalVar globalVar = factory.createGlobalVar(name, type, false, ConstInt.ZERO);
-                addSymbol(name, globalVar);
+                if (arrType == null) {
+                    GlobalVar globalVar = factory.createGlobalVar(name, type, false, ConstInt.ZERO);
+                    addSymbol(name, globalVar);
+                } else {
+                    GlobalVar globalVar = factory.createGlobalVar(name, arrType, false, new ConstArray(arrType));
+                    addSymbol(name, globalVar);
+                }
             } else {
-                AllocaInst allocaInst = factory.createLocalVar(curBlk, null, type);
-                addSymbol(name, allocaInst);
+                if (arrType == null) {
+                    AllocaInst allocaInst = factory.createLocalVar(curBlk, null, type);
+                    addSymbol(name, allocaInst);
+                } else {
+                    AllocaInst localArray = factory.createLocalArray(curBlk, arrType, null);
+                    addSymbol(name, localArray);
+                }
             }
         }
     }
@@ -314,8 +427,18 @@ public class Vistor {
             return visitExp(initValNode.get1stChildNode());
         }
         // InitVal → '{' [ InitVal { ',' InitVal } ] '}'
-        // TODO: 这里没有考虑数组
-        return null;
+        // TODOn: 这里没有考虑数组
+        List<Value> expList = new ArrayList<>();
+        for (VNode node : initValNode.getChildrenNodes()) {
+            if (node.getNodeType() == NodeType.InitVal) {
+                expList.add(visitInitVal(node, ((ArrayType) type).getElementType()));
+            }
+        }
+        if (!expList.isEmpty()) {
+            return factory.createConstArray(expList);
+        } else {
+            return new ConstArray(type);
+        }
     }
 
     // FuncDef → FuncType Ident '(' [FuncFParams] ')' Block
@@ -352,6 +475,10 @@ public class Vistor {
             addSymbol(funcFParams.get(i).getSecond(), factory.createLocalVar(curBlk, arg, paramTypes.get(i)));
         }
         visitBlock(funcDefNode.getLastChildNode(), null);
+        Instruction lastInst = curFunc.getLastInst();
+        if (type instanceof VoidType && !(lastInst instanceof RetInst)) {
+            factory.createRetInst(curBlk);
+        }
         popTbl();
     }
 
@@ -379,6 +506,12 @@ public class Vistor {
         return funcFParams;
     }
 
+    private boolean isPairBrackets(VNode l, VNode r) {
+        if (l.getNodeType() != NodeType.EndNode || r.getNodeType() != NodeType.EndNode)
+            return false;
+        return getEndNodeTokenType(l) == TokenType.LBRACK && getEndNodeTokenType(r) == TokenType.RBRACK;
+    }
+
     // FuncFParam → BType Ident ['[' ']' { '[' ConstExp ']' }]
     private Pair<Type, String> visitFuncFParam(VNode funcFParamNode) {
         VNode typeEndNode = funcFParamNode.getChildNode(0).get1stChildNode();
@@ -389,8 +522,24 @@ public class Vistor {
         } else if (endNodeTokenType == TokenType.VOIDTK) {
             type = VoidType.voidType;
         }
+        List<Integer> dims = new ArrayList<>();
+        for (int i = 0; i < funcFParamNode.getChildrenNodes().size(); i++) {
+            VNode node = funcFParamNode.getChildNode(i);
+            if (node.getNodeType() == NodeType.EndNode && i > 0 && isPairBrackets(funcFParamNode.getChildNode(i - 1), node)) {
+                // 将可能被省略的第一个维度补为-1, 只做占位用, 也只会被添加一次
+                dims.add(-1);
+            } else if (node.getNodeType() == NodeType.ConstExp)
+                dims.add(((ConstInt) visitConstExp(node)).getValue());
+        }
+        Type arrType = type;
+        // 这里无需考虑作为形参的数组的第一维
+        for (int i = dims.size() - 1; i > 0; i--) {
+            arrType = factory.getArrayType(arrType, dims.get(i));
+        }
+        if (!dims.isEmpty())
+            type = new PointerType(arrType);
         String name = getEndNodeValue(funcFParamNode.getChildNode(1));
-        // TODO: 这里没有考虑数组
+        // TODOn: 这里没有考虑数组
         return new Pair<>(type, name);
     }
 
@@ -517,14 +666,14 @@ public class Vistor {
         refillIf(curIfTrueBlk, curIfFalseBlk, curIfFinalBlk, ifRefillList);
     }
 
-    private void refillFor(BasicBlock forStmt2Blk, BasicBlock finalBlk, List<Pair<BrInst, Integer>> forRefillList) {
+    private void refillFor(BasicBlock continueBlk, BasicBlock finalBlk, List<Pair<BrInst, Integer>> forRefillList) {
         for (Pair<BrInst, Integer> pair : forRefillList) {
             if (pair.getSecond() == 0) {
                 // break
                 pair.getFirst().setJmpBlock(finalBlk);
             } else {
                 // continue
-                pair.getFirst().setJmpBlock(forStmt2Blk);
+                pair.getFirst().setJmpBlock(continueBlk);
             }
         }
     }
@@ -621,7 +770,11 @@ public class Vistor {
         }
 
         // refill break and continue
-        refillFor(forStmt2Blk, curFinalBlk, forRefillList);
+        BasicBlock continueBlk;
+        if (forStmt2Blk != null) continueBlk = forStmt2Blk;
+        else if (condBlk != null) continueBlk = condBlk;
+        else continueBlk = forBlk;
+        refillFor(continueBlk, curFinalBlk, forRefillList);
 
         inFor--;
     }
@@ -741,8 +894,10 @@ public class Vistor {
                     case RETURNTK -> {
                         if (stmtNode.getChildrenNodes().size() == 3) {
                             factory.createRetInst(curBlk, visitExp(stmtNode.getChildNode(1)));
+                            switchBlk();
                         } else {
                             factory.createRetInst(curBlk);
+                            switchBlk();
                         }
                     }
                     case PRINTFTK -> visitPrintfStmt(stmtNode);
@@ -784,7 +939,8 @@ public class Vistor {
             case PLUS -> op = Operator.Add;
             case MINU -> op = Operator.Sub;
         }
-        return isConstExp ? calc(op, ((ConstInt) addExpValue).getValue(), ((ConstInt) mulExpValue).getValue()) : factory.createBinaryInst(curBlk, op, addExpValue, mulExpValue);
+        boolean isConst = addExpValue instanceof ConstInt && mulExpValue instanceof ConstInt;
+        return isConst ? calc(op, ((ConstInt) addExpValue).getValue(), ((ConstInt) mulExpValue).getValue()) : factory.createBinaryInst(curBlk, op, addExpValue, mulExpValue);
     }
 
     // MulExp → UnaryExp | MulExp ('*' | '/' | '%') UnaryExp
@@ -802,7 +958,8 @@ public class Vistor {
             case DIV -> op = Operator.Div;
             case MOD -> op = Operator.Mod;
         }
-        return isConstExp ? calc(op, ((ConstInt) mulExpValue).getValue(), ((ConstInt) unaryExpValue).getValue()) : factory.createBinaryInst(curBlk, op, mulExpValue, unaryExpValue);
+        boolean isConst = unaryExpValue instanceof ConstInt && mulExpValue instanceof ConstInt;
+        return isConst ? calc(op, ((ConstInt) mulExpValue).getValue(), ((ConstInt) unaryExpValue).getValue()) : factory.createBinaryInst(curBlk, op, mulExpValue, unaryExpValue);
     }
 
     // UnaryExp → PrimaryExp | Ident '(' [FuncRParams] ')' | UnaryOp UnaryExp
@@ -822,10 +979,10 @@ public class Vistor {
                 case MINU -> op = Operator.Sub;
                 case NOT -> {
                     op = Operator.Not;
-                    return isConstExp ? calc(op, ((ConstInt) value).getValue()) : factory.createNotInst(curBlk, value);
+                    return value instanceof ConstInt ? calc(op, ((ConstInt) value).getValue()) : factory.createNotInst(curBlk, value);
                 }
             }
-            if (isConstExp) {
+            if (value instanceof ConstInt) {
                 assert op != null;
                 return calc(op, 0, ((ConstInt) value).getValue());
             } else {
@@ -862,10 +1019,7 @@ public class Vistor {
             VNode firstChildNode = primaryExpNode.get1stChildNode();
             switch (firstChildNode.getNodeType()) {
                 case LVal -> {
-                    Value value = visitLVal(firstChildNode);
-                    if (isConstExp)
-                        return value;
-                    return factory.createLoadInst(curBlk, value);
+                    return visitRVal(firstChildNode);
                 }
                 case Number -> {
                     String numberStr = getEndNodeValue(firstChildNode.get1stChildNode());
@@ -877,18 +1031,105 @@ public class Vistor {
         return visitExp(primaryExpNode.getChildNode(1));
     }
 
+    private boolean isIdxConst(List<Value> idxList) {
+        for (Value val : idxList) {
+            if (!(val instanceof ConstInt))
+                return false;
+        }
+        return true;
+    }
+
+    // RVal → Ident {'[' Exp ']'}
+    // 作为右值, 主要返回的是"值"而非地址, 当然这里的值的类型也可以是地址
+    // 涉及到访问全局/局部变量/数组, 实参, 访问形参
+    // 如果作为右值访问到了一个常量普通变量或者常量数组的原子成员, 都将其替换为对应的数值
+    private Value visitRVal(VNode rValNode) {
+        String name = getEndNodeValue(rValNode.get1stChildNode());
+        if (rValNode.getChildrenNodes().size() == 1) {
+            // RVal → Ident
+            // 可能是普通变量, 也可能是数组名
+            // findConst可能找到局部/全局const变量或者全局的任意普通变量
+            Pair<Boolean, Integer> aConst = findConst(name);
+            if (isInGlobal() || (aConst != null && aConst.getFirst()))
+                return new ConstInt(IntType.i32, aConst.getSecond());
+            Value addr = findSym(name);
+            // 普通变量: Load, 数组名(作实参): GEP获取第一层的指针
+            Type targetType = ((PointerType) addr.getType()).getTargetType();
+            Value retVal = null;
+            if (targetType instanceof ArrayType) {
+                List<Value> indexList = new ArrayList<>();
+                indexList.add(ConstInt.ZERO);
+                indexList.add(ConstInt.ZERO);
+                retVal = factory.createGEPInst(curBlk, addr, indexList);
+            } else {
+                retVal = factory.createLoadInst(curBlk, addr);
+            }
+            return retVal;
+        }
+        // RVal → Ident {'[' Exp ']'}
+        // 整体可能是数组元素: 访问形参或普通数组, 也可能是数组元素的地址: 只可能是函数实参
+        // Ident可能访问的是全局/局部数组: 即指针指向数组, 也可能是函数形参: 即指针指向指针
+        Pair<Boolean, ConstArray> constArray = findConstArray(name);
+        Value addr = findSym(name);
+        List<Value> idxList = new ArrayList<>();
+        for (VNode expNode : rValNode.getChildrenNodes()) {
+            if (expNode.getNodeType() == NodeType.Exp) {
+                idxList.add(visitExp(expNode));
+            }
+        }
+        // 当前处于全局变量定义区, 或者对应的数组为const, 且索引也能求出值, 就可以将其替换为常量
+        if (isInGlobal() || (constArray != null && constArray.getFirst() && isIdxConst(idxList))) {
+            return constArray.getSecond().getElement(idxList);
+        }
+        Type type = addr.getType(), targetType = ((PointerType) type).getTargetType();
+        if (targetType instanceof PointerType) {
+            // Ident对应的是形参需要额外load一次
+            addr = factory.createLoadInst(curBlk, addr);
+        } else {
+            // Ident对应的是数组
+            idxList.add(0, ConstInt.ZERO);
+        }
+        addr = factory.createGEPInst(curBlk, addr, idxList);
+        targetType = ((PointerType) addr.getType()).getTargetType();
+        if (targetType instanceof ArrayType) {
+            // 整体为数组, 作为右值要将其转化为内部第一个"元素"的地址
+            ArrayList<Value> list = new ArrayList<>();
+            list.add(ConstInt.ZERO);
+            list.add(ConstInt.ZERO);
+            return factory.createGEPInst(curBlk, addr, list);
+        } else {
+            // 整体为普通元素, 直接Load获取值就行
+            return factory.createLoadInst(curBlk, addr);
+        }
+    }
+
     // LVal → Ident {'[' Exp ']'}
     private Value visitLVal(VNode lValNode) {
         String name = getEndNodeValue(lValNode.get1stChildNode());
         if (lValNode.getChildrenNodes().size() == 1) {
-            // LVal → Ident
-            if (isConstExp)
-                return new ConstInt(IntType.i32, findConst(name));
+            // LVal → Ident, 由于是左值, 则只可能是普通变量
+            /*Integer aConst = findConst(name);
+            if (aConst != null)
+                return new ConstInt(IntType.i32, aConst);*/
             return findSym(name);
         }
-        // LVal → Ident {'[' Exp ']'}
-        // TODO: 这里没有考虑数组
-        return null;
+        // LVal → Ident {'[' Exp ']'}, 由于是左值, 则Exp数量一定匹配原数组的维度
+        Value sym = findSym(name);
+        List<Value> idxList = new ArrayList<>();
+        for (VNode expNode : lValNode.getChildrenNodes()) {
+            if (expNode.getNodeType() == NodeType.Exp) {
+                idxList.add(visitExp(expNode));
+            }
+        }
+        Type type = sym.getType(), targetType = ((PointerType) type).getTargetType();
+        if (targetType instanceof PointerType) {
+            // a[][2] symbol对应的是形参需要额外load一次
+            sym = factory.createLoadInst(curBlk, sym);
+        } else {
+            // a[2][2]
+            idxList.add(0, ConstInt.ZERO);
+        }
+        return factory.createGEPInst(curBlk, sym, idxList);
     }
 
     // RelExp → AddExp | RelExp ('<' | '>' | '<=' | '>=') AddExp

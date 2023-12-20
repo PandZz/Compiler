@@ -59,4 +59,8 @@ public class IOUtils {
     public static String readInput() throws IOException {
         return readFile(INPUT_FILE);
     }
+
+    public static int getBufferLength() {
+        return buffer.length();
+    }
 }

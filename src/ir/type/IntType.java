@@ -14,6 +14,18 @@ public class IntType implements Type {
         return bit;
     }
 
+    public boolean isI1() {
+        return bit == 1;
+    }
+
+    public boolean isI8() {
+        return bit == 8;
+    }
+
+    public boolean isI32() {
+        return bit == 32;
+    }
+
     @Override
     public String toString() {
         return "i" + bit;

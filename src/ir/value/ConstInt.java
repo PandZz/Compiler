@@ -12,8 +12,17 @@ public class ConstInt extends Const {
         this.value = value;
     }
 
+    public ConstInt(int value) {
+        super(String.valueOf(value), IntType.i32);
+        this.value = value;
+    }
+
     public int getValue() {
         return value;
+    }
+
+    public boolean isZero() {
+        return value == 0;
     }
 
     @Override

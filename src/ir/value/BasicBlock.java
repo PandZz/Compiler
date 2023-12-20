@@ -55,6 +55,7 @@ public class BasicBlock extends User {
     }
 
     public Instruction getLastInst() {
+        if (getOperands().isEmpty()) return null;
         return (Instruction) getOperands().get(getOperands().size() - 1);
     }
 

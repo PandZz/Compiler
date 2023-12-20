@@ -3,6 +3,7 @@ package ir.value;
 import ir.IRModule;
 import ir.type.FunctionType;
 import ir.type.Type;
+import ir.value.instructions.Instruction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +47,11 @@ public class Function extends User {
         return basicBlocks;
     }
 
+    public Instruction getLastInst() {
+        if (basicBlocks.isEmpty()) return null;
+        return basicBlocks.get(basicBlocks.size() - 1).getLastInst();
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -69,7 +75,8 @@ public class Function extends User {
         else {
             sb.append(") {");
             for (BasicBlock basicBlock : basicBlocks) {
-                sb.append(basicBlock.toString());
+                if (!basicBlock.getOperands().isEmpty())
+                    sb.append(basicBlock.toString());
             }
             sb.append("}\n");
         }

@@ -27,18 +27,24 @@ public class Compiler {
 //            compUnitNode.printToBuffer();
 //            IOUtils.writeBuffer2OutPut();
 
+            boolean hasError = false;
             // 错误处理
             if (Config.ERROR) {
                 ErrorHandler errorHandler = ErrorHandler.getInstance();
                 errorHandler.CompUnitError(compUnitNode);
-//                errorHandler.printErrors2Buffer();
+                errorHandler.printErrors2Buffer();
+                hasError = IOUtils.getBufferLength() > 0;
+                IOUtils.writeBuffer2Error();
+                IOUtils.clearBuffer();
             }
 
             // 中间代码生成
-            Vistor vistor = Vistor.getInstance();
-            vistor.visitCompUnit(compUnitNode);
-            IRModule.getInstance().print2Buffer();
-            IOUtils.writeBuffer2IR();
+            if (!hasError) {
+                Vistor vistor = Vistor.getInstance();
+                vistor.visitCompUnit(compUnitNode);
+                IRModule.getInstance().print2Buffer();
+                IOUtils.writeBuffer2IR();
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

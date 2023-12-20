@@ -1,12 +1,10 @@
 package ir;
 
-import ir.type.IntType;
-import ir.type.PointerType;
-import ir.type.Type;
-import ir.type.VoidType;
+import ir.type.*;
 import ir.value.*;
 import ir.value.instructions.*;
 import ir.value.instructions.mem.AllocaInst;
+import ir.value.instructions.mem.GEPInst;
 import ir.value.instructions.mem.LoadInst;
 import ir.value.instructions.mem.StoreInst;
 import ir.value.instructions.terminator.BrInst;
@@ -70,8 +68,8 @@ public class IRBuildFactory {
         return binaryInst;
     }
 
-    public BinaryInst createNotInst(BasicBlock basicBlock, Value value) {
-        return createBinaryInst(basicBlock, Operator.Eq, value, ConstInt.ZERO);
+    public IcmpInst createNotInst(BasicBlock basicBlock, Value value) {
+        return createIcmpInst(basicBlock, Operator.Eq, value, ConstInt.ZERO);
     }
 
     public GlobalVar createGlobalVar(String name, Type type, boolean isConst, Value value) {
@@ -137,8 +135,82 @@ public class IRBuildFactory {
     }
 
     public BrInst createBrInst(BasicBlock basicBlock, BasicBlock jmpBlock) {
+//        if (jmpBlock == null)
+//            throw new RuntimeException("jmpBlock is null");
         BrInst brInst = new BrInst(jmpBlock);
         basicBlock.addOperand(brInst);
         return brInst;
+    }
+
+    public ArrayType getArrayType(Type elementType, int length) {
+        return new ArrayType(elementType, length);
+    }
+
+    public ConstArray createConstArray(List<Value> array) {
+        Type arrType = getArrayType(array.get(0).getType(), array.size());
+        return new ConstArray(arrType, array);
+    }
+
+    /**
+     * 创建无显式初始值的全局数组
+     * @param name
+     * @param arrType
+     * @param isConst
+     * @return
+     */
+    public GlobalVar createGlobalArray(String name, Type arrType, boolean isConst) {
+        ConstArray array = new ConstArray(arrType);
+        return createGlobalVar(name, arrType, isConst, array);
+    }
+
+    /**
+     * 创建有显式初始值的全局数组
+     * @param name
+     * @param arrType
+     * @param arr 数组的显式初始值
+     * @param isConst
+     * @return
+     */
+    public GlobalVar createGlobalArray(String name, Type arrType, boolean isConst, List<Value> arr) {
+        if (arr == null || arr.isEmpty())
+            return createGlobalArray(name, arrType, isConst);
+        ConstArray array = new ConstArray(arrType, arr);
+        return createGlobalVar(name, arrType, isConst, array);
+    }
+
+    public GEPInst createGEPInst(BasicBlock basicBlock, Value pointer, List<Value> indices) {
+        GEPInst gepInst = new GEPInst(pointer, indices);
+        basicBlock.addOperand(gepInst);
+        return gepInst;
+    }
+
+    public void initArray(BasicBlock blk, Value pointer, ConstInt idx, Value value) {
+        if (((PointerType) pointer.getType()).getTargetType() instanceof IntType) {
+            createStoreInst(blk, pointer, value);
+        } else {
+            ArrayList<Value> list = new ArrayList<>();
+            list.add(ConstInt.ZERO);
+//            list.add(idx);
+//            createGEPInst(blk, pointer, list);
+            for (int i = 0; i < ((ArrayType) ((PointerType) pointer.getType()).getTargetType()).getLength(); i++) {
+                ConstInt nidx = new ConstInt(i);
+                list.add(nidx);
+                GEPInst ptr = createGEPInst(blk, pointer, list);
+                list.remove(list.size() - 1);
+                initArray(blk, ptr, nidx, ((ConstArray) value).getArray().get(i));
+            }
+        }
+    }
+
+    public AllocaInst createLocalArray(BasicBlock basicBlock, Type arrType, Value value) {
+        AllocaInst allocaInst = new AllocaInst(arrType);
+        // TODO: 为数组设置初始值
+        basicBlock.addOperand(allocaInst);
+        if (value != null) {
+//            System.out.println(allocaInst);
+//            System.out.println(value);
+            initArray(basicBlock, allocaInst, ConstInt.ZERO, value);
+        }
+        return allocaInst;
     }
 }
